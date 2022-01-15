@@ -1,31 +1,17 @@
 use bytes::Bytes;
-use mini_redis::client;
 use tokio::sync::{mpsc, oneshot};
 use tokio::net::{TcpListener, TcpStream};
-use mini_redis::{Connection, Frame};
 
 /// Multiple different commands are multiplexed over a single channel.
-#[derive(Debug)]
-enum Command {
-    Get {
-        key: String,
-        resp: Responder<Option<Bytes>>,
-    },
-    Set {
-        key: String,
-        val: Bytes,
-        resp: Responder<()>,
-    },
-}
+// #[derive(Debug)]
 
 /// Provided by the requester and used by the manager task to send the command
 /// response back to the requester.
 type Responder<T> = oneshot::Sender<mini_redis::Result<T>>;
 
+
 #[tokio::main]
 async fn main() {
-    let (tx, mut rx) = mpsc::channel(32);
-
     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
 
     loop {
@@ -39,8 +25,8 @@ async fn main() {
 }
 
 async fn process(socket: TcpStream) {
-    // TODO CWS: this should be read as a TCP stream with a command and 
-    socket.readable().await?;
+    // TODO CWS: this should be read as a TCP stream
+    socket.readable().await;
 
     // Creating the buffer **after** the `await` prevents it from
     // being stored in the async task.
@@ -49,16 +35,27 @@ async fn process(socket: TcpStream) {
 
     // Try to read data, this may still fail with `WouldBlock`
     // if the readiness event is a false positive.
-    match stream.try_read(&mut buf) {
-        Ok(0) => break,
+    match socket.try_read(&mut buf) {
+        Ok(0) => (),
         Ok(n) => {
+            println!("buffer: {:?}", buf);
             println!("read {} bytes", n);
-        }
-        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
-            continue;
+            respond(socket).await;
         }
         Err(e) => {
-            return Err(e.into());
+            println!("{}", e);
         }
+    }
+}
+
+async fn respond(socket: TcpStream) {
+    // Wait for the socket to be writable
+    socket.writable().await;
+
+    // Try to write data, TODO: this may still fail with `WouldBlock`
+    // if the readiness event is a false positive.
+    match socket.try_write(b"hello world") {
+        Ok(n) => println!("OK! {}", n),
+        Err(e) => println!("{}", e)
     }
 }
