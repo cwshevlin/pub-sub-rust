@@ -9,7 +9,6 @@ use tokio::net::{TcpListener, TcpStream};
 /// response back to the requester.
 type Responder<T> = oneshot::Sender<mini_redis::Result<T>>;
 
-
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
@@ -30,7 +29,7 @@ async fn process(socket: TcpStream) {
 
     // Creating the buffer **after** the `await` prevents it from
     // being stored in the async task.
-    let mut buf = [0; 4096];
+    let mut buf = [0; 128];
 
 
     // Try to read data, this may still fail with `WouldBlock`
@@ -38,7 +37,7 @@ async fn process(socket: TcpStream) {
     match socket.try_read(&mut buf) {
         Ok(0) => (),
         Ok(n) => {
-            println!("buffer: {:?}", buf);
+            println!("buffer: {:?}", std::str::from_utf8(&buf));
             println!("read {} bytes", n);
             respond(socket).await;
         }
