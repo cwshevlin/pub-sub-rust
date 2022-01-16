@@ -29,7 +29,7 @@ async fn process(socket: TcpStream) {
 
     // Creating the buffer **after** the `await` prevents it from
     // being stored in the async task.
-    let mut buf = [0; 128];
+    let mut buf = [0; 64];
 
 
     // Try to read data, this may still fail with `WouldBlock`
@@ -39,7 +39,7 @@ async fn process(socket: TcpStream) {
         Ok(n) => {
             println!("buffer: {:?}", std::str::from_utf8(&buf));
             println!("read {} bytes", n);
-            respond(socket).await;
+            respond(socket, &buf).await;
         }
         Err(e) => {
             println!("{}", e);
@@ -47,13 +47,13 @@ async fn process(socket: TcpStream) {
     }
 }
 
-async fn respond(socket: TcpStream) {
+async fn respond(socket: TcpStream, &buf: &[u8; 64]) {
     // Wait for the socket to be writable
     socket.writable().await;
 
     // Try to write data, TODO: this may still fail with `WouldBlock`
     // if the readiness event is a false positive.
-    match socket.try_write(b"hello world") {
+    match socket.try_write(&buf) {
         Ok(n) => println!("OK! {}", n),
         Err(e) => println!("{}", e)
     }
