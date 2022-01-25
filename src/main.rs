@@ -31,14 +31,11 @@ async fn process(socket: TcpStream) {
     // being stored in the async task.
     let mut buf = [0; 64];
 
-
     // Try to read data, this may still fail with `WouldBlock`
     // if the readiness event is a false positive.
     match socket.try_read(&mut buf) {
         Ok(0) => (),
         Ok(n) => {
-            println!("buffer: {:?}", std::str::from_utf8(&buf));
-            println!("read {} bytes", n);
             respond(socket, &buf).await;
         }
         Err(e) => {
@@ -54,7 +51,7 @@ async fn respond(socket: TcpStream, &buf: &[u8; 64]) {
     // Try to write data, TODO: this may still fail with `WouldBlock`
     // if the readiness event is a false positive.
     match socket.try_write(&buf) {
-        Ok(n) => println!("OK! {}", n),
-        Err(e) => println!("{}", e)
+        Ok(n) => (),
+        Err(e) => ()
     }
 }
