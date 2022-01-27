@@ -1,6 +1,8 @@
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio::net::{TcpListener, TcpStream};
+mod frame;
+use frame::Frame;
 
 /// Multiple different commands are multiplexed over a single channel.
 // #[derive(Debug)]
@@ -36,6 +38,7 @@ async fn process(socket: TcpStream) {
     match socket.try_read(&mut buf) {
         Ok(0) => (),
         Ok(n) => {
+            let frame = Frame::new(&buf);
             respond(socket, &buf).await;
         }
         Err(e) => {
