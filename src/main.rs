@@ -32,7 +32,9 @@ async fn main() {
         .and(with_clients(clients.clone()))
         .and_then(handler::unregister_handler));
   
-    let publish = warp::path!("publish")
+    let publish = warp::path("publish")
+      .and(warp::post())
+      .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
       .and(with_clients(clients.clone()))
       .and_then(handler::publish_handler);
