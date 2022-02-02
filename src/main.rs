@@ -1,8 +1,6 @@
 use std::{collections::HashMap, convert::Infallible};
-use std::io::Error;
 use std::sync::Arc;
-use client::Topics;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex};
 use warp::{Filter, Rejection, Reply};
 mod frame;
 mod client;
