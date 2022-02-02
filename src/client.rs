@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use serde::{Serialize, Deserialize, Deserializer, de::DeserializeOwned};
+use serde::{Serialize, Deserialize};
 use tokio::sync::{Mutex, mpsc};
 use warp::ws::Message;
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Clone)]
 pub struct Client {
     pub connection_id: usize,
     pub topics: Vec<String>,
