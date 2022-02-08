@@ -1,7 +1,10 @@
+use std::collections::HashSet;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
 use tokio::sync::{Mutex};
 use warp::{Filter, Rejection, Reply};
+
+use crate::client::{Topics, Clients};
 mod frame;
 mod client;
 mod handler;
@@ -13,7 +16,8 @@ type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
-    let clients: client::Clients = Arc::new(Mutex::new(HashMap::new()));
+    let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
+    let topics: Topics = Arc::new(Mutex::new(HashMap::new()));
 
     let health_route = warp::path!("health").and_then(handler::health_handler);
   
@@ -34,8 +38,25 @@ async fn main() {
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
+      .and(with_topics(topics.clone()))
       .and(with_clients(clients.clone()))
       .and_then(handler::publish_handler);
+
+    let subscribe = warp::path("subscribe")
+      .and(warp::post())
+      .and(warp::body::content_length_limit(1024 * 16))
+      .and(warp::body::json())
+      .and(with_topics(topics.clone()))
+      .and(with_clients(clients.clone()))
+    .and_then(handler::subscribe_handler);
+
+    let unsubscribe = warp::path("unsubscribe")
+      .and(warp::post())
+      .and(warp::body::content_length_limit(1024 * 16))
+      .and(warp::body::json())
+      .and(with_topics(topics.clone()))
+      .and(with_clients(clients.clone()))
+      .and_then(handler::unsubscribe_handler);
   
     let ws_route = warp::path("ws")
       .and(warp::ws())
@@ -47,11 +68,17 @@ async fn main() {
       .or(register_routes)
       .or(ws_route)
       .or(publish)
+      .or(subscribe)
+      .or(unsubscribe)
       .with(warp::cors().allow_any_origin());
   
     warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
 }
 
-fn with_clients(clients: client::Clients) -> impl Filter<Extract = (client::Clients,), Error = Infallible> + Clone {
+fn with_clients(clients: Clients) -> impl Filter<Extract = (Clients,), Error = Infallible> + Clone {
     warp::any().map(move || clients.clone())
+}
+
+fn with_topics(topics: Topics) -> impl Filter<Extract = (Topics,), Error = Infallible> + Clone {
+    warp::any().map(move || topics.clone())
 }

@@ -1,16 +1,11 @@
 use warp::ws::{Message, WebSocket};
-use crate::client::{Clients, Client};
+use crate::client::{Client, Clients, TopicsRequest};
 use tokio::sync::mpsc;
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use serde::{Deserialize};
 use serde_json::from_str;
 
-
-#[derive(Deserialize, Debug)]
-pub struct TopicsRequest {
-    topics: Vec<String>,
-}
 
 pub async fn client_connection(ws: WebSocket, id: String, clients: Clients, mut client: Client) {
     let (client_ws_tx, mut client_ws_rx) = ws.split();
@@ -49,6 +44,7 @@ async fn client_msg(id: &str, msg: Message, clients: &Clients) {
         return;
     }
 
+    // TODO CWS: parse subscribe/unsubscribe
     let topics_req: TopicsRequest = match from_str(&message) {
         Ok(v) => v,
         Err(e) => {
@@ -57,8 +53,5 @@ async fn client_msg(id: &str, msg: Message, clients: &Clients) {
         }
     };
 
-    let mut locked = clients.lock().await;
-    if let Some(v) = locked.get_mut(id) {
-        v.topics = topics_req.topics;
-    }
+    // TODO CWS: parse publish messages, maybe add/delete/update
 }
