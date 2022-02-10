@@ -5,9 +5,9 @@ use tokio::sync::{Mutex, mpsc};
 use warp::ws::Message;
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Client {
-    pub connection_id: usize,
+    pub connection_id: String,
     pub sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>
 }
 
@@ -30,7 +30,7 @@ pub type Topics = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
-    pub user_id: usize,
+    pub user_id: String,
 }
   
 #[derive(Serialize)]

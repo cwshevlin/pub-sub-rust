@@ -10,9 +10,6 @@ mod client;
 mod handler;
 mod ws;
 
-/// Multiple different commands are multiplexed over a single channel.
-// #[derive(Debug)]
-type Result<T> = std::result::Result<T, Rejection>;
 
 #[tokio::main]
 async fn main() {
@@ -61,6 +58,7 @@ async fn main() {
     let ws_route = warp::path("ws")
       .and(warp::ws())
       .and(warp::path::param())
+      .and(with_topics(topics.clone()))
       .and(with_clients(clients.clone()))
       .and_then(handler::ws_handler);
   

@@ -10,13 +10,17 @@ pub async fn register_handler(body: RegisterRequest, clients: Clients) -> Result
     let user_id = body.user_id;
     let uuid = Uuid::new_v4().to_string();
   
-    register_client(uuid.clone(), user_id, clients).await;
-    Ok(json!({
-      "url": format!("ws://127.0.0.1:8000/ws/{}", uuid),
-    }).to_string())
+    match register_client(uuid.clone(), user_id, clients).await {
+        Ok(_) => {
+            return Ok(json!({
+            "url": format!("ws://127.0.0.1:8000/ws/{}", uuid),
+            }).to_string())
+        },
+        Err(_) => Err(warp::reject::reject())
+    }
   }
     
-async fn register_client(id: String, user_id: usize, clients: Clients) -> Result<impl Reply, Rejection> {
+async fn register_client(id: String, user_id: String, clients: Clients) -> Result<impl Reply, Rejection> {
     clients.lock().await.insert(
         id,
         Client {
@@ -32,10 +36,10 @@ pub async fn unregister_handler(id: String, clients: Clients) -> Result<impl Rep
     Ok(StatusCode::OK)
 }
 
-pub async fn ws_handler(ws: warp::ws::Ws, id: String, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn ws_handler(ws: warp::ws::Ws, id: String, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
     let client = clients.lock().await.get(&id).cloned();
     match client {
-      Some(c) => Ok(ws.on_upgrade(move |socket| ws::client_connection(socket, id, clients, c))),
+      Some(c) => Ok(ws.on_upgrade(move |socket| ws::client_connection(socket, id, clients, c, topics))),
       None => Err(warp::reject::not_found()),
     }
 }
@@ -45,18 +49,24 @@ pub async fn health_handler() -> Result<impl Reply, Rejection> {
 }
 
 pub async fn publish_handler(body: Event, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+    let mut error = false;
     if let Some(clients) = topics.lock().await.get(&body.topic).cloned() {
         for client in clients {
             if let Some(sender) = &client.sender {
-                sender.send(Ok(Message::text(body.message.clone())));
+                match sender.send(Ok(Message::text(body.message.clone()))) {
+                    Err(_) => error = true,
+                    _ => {}
+                }
             }
         }
-        return Ok(StatusCode::OK);
+        if !error {
+            return Ok(StatusCode::OK);
+        }
     }
     Ok(StatusCode::NOT_FOUND)
 }
 
-pub async fn subscribe_handler(body: SubscribeRequest, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn subscribe_handler(body: SubscribeRequest,topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
     if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
         for topic in body.topics {
             if let Some(current_subscribers) = topics.lock().await.get(&topic) {
@@ -67,6 +77,9 @@ pub async fn subscribe_handler(body: SubscribeRequest, topics: Topics, clients: 
                     current_subscribers
                 );
             }
+        }
+        if let Some(sender) = &client.sender {
+            sender.send(Ok(Message::text(format!("subscribed to {:?}", topics))));
         }
         return Ok(StatusCode::OK);
     }
