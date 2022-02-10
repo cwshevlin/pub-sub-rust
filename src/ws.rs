@@ -51,8 +51,9 @@ async fn client_msg(id: &str, msg: Message, clients: Clients, topics: Topics) {
             return;
         }
     };
+    println!("subscribe request {:?}", subscribe_request);
 
-    subscribe_handler(subscribe_request, topics, clients);
+    subscribe_handler(subscribe_request, topics, clients).await;
 
     // TODO CWS: parse publish messages, maybe add/delete/update
 }

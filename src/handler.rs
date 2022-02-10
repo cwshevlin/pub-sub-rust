@@ -8,23 +8,25 @@ use crate::ws;
 
 pub async fn register_handler(body: RegisterRequest, clients: Clients) -> Result<impl Reply, Rejection> {
     let user_id = body.user_id;
-    let uuid = Uuid::new_v4().to_string();
+    // let uuid = Uuid::new_v4().to_string();
+    // TODO CWS: generate new uuids
+    let uuid = String::from("cbf99b28-4488-45c9-aa12-46b3cfb979bb");
   
-    match register_client(uuid.clone(), user_id, clients).await {
+    match register_client(user_id.clone(), clients).await {
         Ok(_) => {
             return Ok(json!({
-            "url": format!("ws://127.0.0.1:8000/ws/{}", uuid),
+            "url": format!("ws://127.0.0.1:8000/ws/{}", user_id),
             }).to_string())
         },
         Err(_) => Err(warp::reject::reject())
     }
   }
     
-async fn register_client(id: String, user_id: String, clients: Clients) -> Result<impl Reply, Rejection> {
+async fn register_client(user_id: String, clients: Clients) -> Result<impl Reply, Rejection> {
     clients.lock().await.insert(
-        id,
+        user_id.clone(),
         Client {
-            connection_id: user_id,
+            user_id: user_id.clone(),
             sender: None,
         },
     );
@@ -67,7 +69,9 @@ pub async fn publish_handler(body: Event, topics: Topics, clients: Clients) -> R
 }
 
 pub async fn subscribe_handler(body: SubscribeRequest,topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+    println!("Client subscribing: {:#?}", clients);
     if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
+        println!("Client subscribing: {:#?}", client);
         for topic in body.topics {
             if let Some(current_subscribers) = topics.lock().await.get(&topic) {
                 let mut current_subscribers = current_subscribers.clone();
@@ -79,7 +83,8 @@ pub async fn subscribe_handler(body: SubscribeRequest,topics: Topics, clients: C
             }
         }
         if let Some(sender) = &client.sender {
-            sender.send(Ok(Message::text(format!("subscribed to {:?}", topics))));
+            println!("Sending to client: {}", client.user_id);
+            sender.send(Ok(Message::text(format!("subscribed"))));
         }
         return Ok(StatusCode::OK);
     }

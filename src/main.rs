@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
 use tokio::sync::{Mutex};
-use warp::{Filter, Rejection, Reply};
+use warp::{Filter, Reply};
 
 use crate::client::{Topics, Clients};
 mod frame;

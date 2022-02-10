@@ -7,13 +7,13 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug)]
 pub struct Client {
-    pub connection_id: String,
+    pub user_id: String,
     pub sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>
 }
 
 impl PartialEq for Client {
     fn eq(&self, other: &Client) -> bool {
-        self.connection_id == other.connection_id
+        self.user_id == other.user_id
     }
 }
 
@@ -21,7 +21,7 @@ impl Eq for Client {}
 
 impl Hash for Client {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.connection_id.hash(state);
+        self.user_id.hash(state);
     }
 }
 
@@ -51,7 +51,7 @@ pub struct TopicsRequest {
 }
 
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct SubscribeRequest {
     pub user_id: String,
     pub topics: Vec<String>,
