@@ -1,14 +1,14 @@
 use std::io::Error;
 
 use warp::ws::{Message, WebSocket};
-use crate::{client::{Client, Clients, SubscribeRequest, Topics}, handler::subscribe_handler, store::Command};
+use crate::{client::{Client, Clients, SubscribeRequest, Subscribers}, handler::subscribe_handler, store::Command};
 use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use serde_json::from_str;
 
 
-pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) {
+pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscribers_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) {
     let (client_ws_tx, mut client_ws_rx) = ws.split();
     let (client_tx, client_rx) = mpsc::unbounded_channel::<Result<Message, warp::Error>>();
     let client_rx = UnboundedReceiverStream::new(client_rx); 
@@ -27,14 +27,14 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, to
                 break;
             }
         };
-        client_msg(&id, msg, clients.clone(), topics.clone()).await;
+        client_msg(&id, msg, clients.clone(), subscribers.clone()).await;
     }
 
     clients.lock().await.remove(&id);
     println!("{} disconnected", id);
 }
 
-async fn client_msg(id: &str, msg: Message, clients: Clients, topics: Topics) {
+async fn client_msg(id: &str, msg: Message, clients: Clients, subscribers: Subscribers) {
     println!("received message from {}: {:?}", id, msg);
     let message = match msg.to_str() {
         Ok(v) => v,
@@ -55,7 +55,7 @@ async fn client_msg(id: &str, msg: Message, clients: Clients, topics: Topics) {
     };
     println!("subscribe request  from {}: {:?}", id, msg);
 
-    subscribe_handler(subscribe_request, topics, clients).await;
+    subscribe_handler(subscribe_request, subscribers, clients).await;
 
     // TODO CWS: parse publish messages, maybe add/delete/update
 }

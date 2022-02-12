@@ -3,30 +3,7 @@ use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use tokio::sync::{Mutex, mpsc};
 use warp::ws::Message;
-use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Debug)]
-pub struct Client {
-    pub user_id: String,
-    pub sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>
-}
-
-impl PartialEq for Client {
-    fn eq(&self, other: &Client) -> bool {
-        self.user_id == other.user_id
-    }
-}
-
-impl Eq for Client {}
-
-impl Hash for Client {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.user_id.hash(state);
-    }
-}
-
-pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
-pub type Topics = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
@@ -46,19 +23,19 @@ pub struct Event {
 }
 
 #[derive(Deserialize)]
-pub struct TopicsRequest {
-    topics: Vec<String>,
+pub struct SubscribersRequest {
+    subscribers: Vec<String>,
 }
 
 
 #[derive(Deserialize, Debug)]
 pub struct SubscribeRequest {
     pub user_id: String,
-    pub topics: Vec<String>,
+    pub subscribers: Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct UnsubscribeRequest {
     pub user_id: String,
-    pub topics: Vec<String>,
+    pub subscribers: Vec<String>,
 }

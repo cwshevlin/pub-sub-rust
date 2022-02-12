@@ -1,12 +1,12 @@
 use std::io::Error;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
+use store::{ClientsCommand, SubscribersCommand};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, mpsc};
 use warp::{Filter, Reply};
 
-use crate::client::{Topics, Clients};
-use crate::store::{Command};
+use crate::store::{Subscribers, Clients, StoreCommand};
 mod frame;
 mod client;
 mod handler;
@@ -17,21 +17,21 @@ mod store;
 #[tokio::main]
 async fn main() {
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
-    let topics: Topics = Arc::new(Mutex::new(HashMap::new()));
+    let subscribers: Subscribers = Arc::new(Mutex::new(HashMap::new()));
     let store = Arc::new(Mutex::new(HashMap::new()));
 
-    let (clients_tx, mut clients_rx) = mpsc::channel::<Command>(32);
-    let (topics_tx, mut topics_rx) = mpsc::channel::<Command>(32);
-    let (store_tx, mut store_rx) = mpsc::channel::<Command>(32);
+    let (clients_tx, mut clients_rx) = mpsc::channel::<ClientsCommand>(32);
+    let (subscribers_tx, mut subscribers_rx) = mpsc::channel::<SubscribersCommand>(32);
+    let (store_tx, mut store_rx) = mpsc::channel::<StoreCommand>(32);
     
-    let db_manager = tokio::spawn(async move {
+    let store_manager = tokio::spawn(async move {
       while let Some(cmd) = store_rx.recv().await {
           match cmd {
-              Command::Get { key, responder } => {
+              StoreCommand::Get { key, responder } => {
                   let result = store.lock().await.get(&key);
                   let _ = responder.send(result);
               }
-              Command::Set { key, value, responder } => {
+              StoreCommand::Set { key, value, responder } => {
                   let result = store.lock().await.insert(&key, value);
                   let _ = responder.send(result);
               }
@@ -59,7 +59,7 @@ async fn main() {
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
-      .and(with_topics(topics_tx))
+      .and(with_subscribers(subscribers_tx))
       .and(with_clients(clients_tx))
       .and_then(handler::publish_handler);
 
@@ -67,7 +67,7 @@ async fn main() {
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
-      .and(with_topics(topics_tx))
+      .and(with_subscribers(subscribers_tx))
       .and(with_clients(clients_tx))
     .and_then(handler::subscribe_handler);
 
@@ -75,14 +75,14 @@ async fn main() {
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
-      .and(with_topics(topics_tx))
+      .and(with_subscribers(subscribers_tx))
       .and(with_clients(clients_tx))
       .and_then(handler::unsubscribe_handler);
   
     let ws_route = warp::path("ws")
       .and(warp::ws())
       .and(warp::path::param())
-      .and(with_topics(topics_tx))
+      .and(with_subscribers(subscribers_tx))
       .and(with_clients(clients_tx))
       .and_then(handler::ws_handler);
   
@@ -97,10 +97,10 @@ async fn main() {
     warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
 }
 
-fn with_clients(clients_tx: Sender<Result<Command, Error>>) -> impl Filter<Extract = (Sender<Result<Command, Error>>,), Error = Infallible> + Clone {
+fn with_clients(clients_tx: Sender<ClientsCommand>) -> impl Filter<Extract = (Sender<ClientsCommand>,), Error = Infallible> + Clone {
     warp::any().map(move || clients_tx.clone())
 }
 
-fn with_topics(topics_tx: Sender<Result<Command, Error>>) -> impl Filter<Extract = (Sender<Result<Command, Error>>,), Error = Infallible> + Clone {
-    warp::any().map(move || topics_tx.clone())
+fn with_subscribers(subscribers_tx: Sender<SubscribersCommand>) -> impl Filter<Extract = (Sender<SubscribersCommand>,), Error = Infallible> + Clone {
+    warp::any().map(move || subscribers_tx.clone())
 }
