@@ -1,4 +1,8 @@
+use std::io::Error;
+use std::sync::mpsc::Sender;
+
 use crate::client::{Client, Clients, Event, RegisterRequest, SubscribeRequest, UnsubscribeRequest, Topics};
+use crate::store::Command;
 use uuid::Uuid;
 use serde_json::{Value, json};
 use warp::ws::Message;
@@ -6,13 +10,13 @@ use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
 
-pub async fn register_handler(body: RegisterRequest, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     let user_id = body.user_id;
     // let uuid = Uuid::new_v4().to_string();
     // TODO CWS: generate new uuids
     let uuid = String::from("cbf99b28-4488-45c9-aa12-46b3cfb979bb");
   
-    match register_client(user_id.clone(), clients).await {
+    match register_client(user_id.clone(), clients_tx).await {
         Ok(_) => {
             return Ok(json!({
             "url": format!("ws://127.0.0.1:8000/ws/{}", user_id),
@@ -22,7 +26,7 @@ pub async fn register_handler(body: RegisterRequest, clients: Clients) -> Result
     }
   }
     
-async fn register_client(user_id: String, clients: Clients) -> Result<impl Reply, Rejection> {
+async fn register_client(user_id: String, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     clients.lock().await.insert(
         user_id.clone(),
         Client {
@@ -33,12 +37,12 @@ async fn register_client(user_id: String, clients: Clients) -> Result<impl Reply
     Ok(StatusCode::OK)
 }
 
-pub async fn unregister_handler(id: String, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn unregister_handler(id: String, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     clients.lock().await.remove(&id);
     Ok(StatusCode::OK)
 }
 
-pub async fn ws_handler(ws: warp::ws::Ws, id: String, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn ws_handler(ws: warp::ws::Ws, id: String, topics: Topics, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     let client = clients.lock().await.get(&id).cloned();
     match client {
       Some(c) => Ok(ws.on_upgrade(move |socket| ws::client_connection(socket, id, clients, c, topics))),
@@ -50,7 +54,7 @@ pub async fn health_handler() -> Result<impl Reply, Rejection> {
     Ok(StatusCode::OK)
 }
 
-pub async fn publish_handler(body: Event, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn publish_handler(body: Event, topics: Topics,clients_tx: Sender<Result<Command, Error>> ) -> Result<impl Reply, Rejection> {
     let mut error = false;
     if let Some(clients) = topics.lock().await.get(&body.topic).cloned() {
         for client in clients {
