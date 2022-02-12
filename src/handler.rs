@@ -1,16 +1,18 @@
 use std::io::Error;
-use std::sync::mpsc::Sender;
 
 use crate::client::{Client, Clients, Event, RegisterRequest, SubscribeRequest, UnsubscribeRequest, Topics};
 use crate::store::Command;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::oneshot;
 use uuid::Uuid;
 use serde_json::{Value, json};
+use warp::reject::Reject;
 use warp::ws::Message;
 use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
 
-pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
+pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Command>) -> Result<impl Reply, Rejection> {
     let user_id = body.user_id;
     // let uuid = Uuid::new_v4().to_string();
     // TODO CWS: generate new uuids
@@ -26,15 +28,22 @@ pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Result<C
     }
   }
     
-async fn register_client(user_id: String, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
-    clients.lock().await.insert(
-        user_id.clone(),
-        Client {
-            user_id: user_id.clone(),
-            sender: None,
-        },
-    );
-    Ok(StatusCode::OK)
+async fn register_client(user_id: String, clients_tx: Sender<Command>) -> Result<impl Reply, Rejection> {
+    // TODO CWS: probably refactor this so that it accepts commands that are specific to the client data structure.
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command = Command::Set {
+        key: user_id,
+        value: String::from("TODO"),
+        responder: resp_tx
+    };
+    clients_tx.send(command).await;
+
+    let result = resp_rx.await;
+
+    match result {
+        Ok(_) => Ok(StatusCode::OK),
+        Err(e) => Err(warp::reject::reject())
+    }
 }
 
 pub async fn unregister_handler(id: String, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
@@ -42,7 +51,7 @@ pub async fn unregister_handler(id: String, clients_tx: Sender<Result<Command, E
     Ok(StatusCode::OK)
 }
 
-pub async fn ws_handler(ws: warp::ws::Ws, id: String, topics: Topics, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
+pub async fn ws_handler(ws: warp::ws::Ws, id: String, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     let client = clients.lock().await.get(&id).cloned();
     match client {
       Some(c) => Ok(ws.on_upgrade(move |socket| ws::client_connection(socket, id, clients, c, topics))),
@@ -54,7 +63,7 @@ pub async fn health_handler() -> Result<impl Reply, Rejection> {
     Ok(StatusCode::OK)
 }
 
-pub async fn publish_handler(body: Event, topics: Topics,clients_tx: Sender<Result<Command, Error>> ) -> Result<impl Reply, Rejection> {
+pub async fn publish_handler(body: Event, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     let mut error = false;
     if let Some(clients) = topics.lock().await.get(&body.topic).cloned() {
         for client in clients {
@@ -72,7 +81,7 @@ pub async fn publish_handler(body: Event, topics: Topics,clients_tx: Sender<Resu
     Ok(StatusCode::NOT_FOUND)
 }
 
-pub async fn subscribe_handler(body: SubscribeRequest,topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn subscribe_handler(body: SubscribeRequest, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     println!("Client subscribing: {:#?}", clients);
     if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
         println!("Client subscribing: {:#?}", client);
@@ -95,7 +104,7 @@ pub async fn subscribe_handler(body: SubscribeRequest,topics: Topics, clients: C
     Ok(StatusCode::NOT_FOUND)
 }
 
-pub async fn unsubscribe_handler(body: UnsubscribeRequest, topics: Topics, clients: Clients) -> Result<impl Reply, Rejection> {
+pub async fn unsubscribe_handler(body: UnsubscribeRequest, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) -> Result<impl Reply, Rejection> {
     if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
         for topic in body.topics {
             if let Some(current_subscribers) = topics.lock().await.get(&topic) {

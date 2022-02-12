@@ -1,8 +1,9 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{collections::HashMap, io::Error, sync::{Arc, Mutex}};
 
 use crate::client::{Client, Clients, Topics};
 use bytes::Bytes;
-use warp::ws::Message;
+use tokio::sync::oneshot;
+use warp::{ws::Message};
 /*
 
 Structure:
@@ -34,13 +35,17 @@ This is similar to how the manipulative children is represented in SQL
 
 */
 
+type Responder<T> = oneshot::Sender<Result<T, Error>>;
+
 pub enum Command {
     Get {
         key: String,
+        responder: Responder<Option<String>>,
     },
     Set {
         key: String,
-        val: Bytes,
+        value: String,
+        responder: Responder<()>,
     }
 }
 

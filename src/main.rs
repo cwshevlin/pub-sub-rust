@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::io::Error;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
@@ -19,13 +18,30 @@ mod store;
 async fn main() {
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
     let topics: Topics = Arc::new(Mutex::new(HashMap::new()));
-    let (clients_tx, mut clients_rx) = mpsc::channel::<Result<Command, Error>>(32);
-    let (topics_tx, mut topics_rx) = mpsc::channel::<Result<Command, Error>>(32);
+    let store = Arc::new(Mutex::new(HashMap::new()));
+
+    let (clients_tx, mut clients_rx) = mpsc::channel::<Command>(32);
+    let (topics_tx, mut topics_rx) = mpsc::channel::<Command>(32);
+    let (store_tx, mut store_rx) = mpsc::channel::<Command>(32);
+    
+    let db_manager = tokio::spawn(async move {
+      while let Some(cmd) = store_rx.recv().await {
+          match cmd {
+              Command::Get { key, responder } => {
+                  let result = store.lock().await.get(&key);
+                  let _ = responder.send(result);
+              }
+              Command::Set { key, value, responder } => {
+                  let result = store.lock().await.insert(&key, value);
+                  let _ = responder.send(result);
+              }
+          }
+      }
+    });
+
 
     let health_route = warp::path!("health").and_then(handler::health_handler);
   
-    let register_topics_tx = topics_tx.clone();
-    let register_clients_tx = clients_tx.clone();
     let register = warp::path("register");
     let register_routes = register
       .and(warp::post())
@@ -39,8 +55,6 @@ async fn main() {
         .and(with_clients(clients_tx))
         .and_then(handler::unregister_handler));
   
-    let publish_topics_tx = topics_tx.clone();
-    let publish_clients_tx = clients_tx.clone();
     let publish = warp::path("publish")
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
@@ -49,8 +63,6 @@ async fn main() {
       .and(with_clients(clients_tx))
       .and_then(handler::publish_handler);
 
-    let subscribe_topics_tx = topics_tx.clone();
-    let subscribe_clients_tx = clients_tx.clone();
     let subscribe = warp::path("subscribe")
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
@@ -59,8 +71,6 @@ async fn main() {
       .and(with_clients(clients_tx))
     .and_then(handler::subscribe_handler);
 
-    let unsubscribe_topics_tx = topics_tx.clone();
-    let unsubscribe_clients_tx = clients_tx.clone();
     let unsubscribe = warp::path("unsubscribe")
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))

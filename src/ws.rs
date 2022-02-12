@@ -1,12 +1,14 @@
+use std::io::Error;
+
 use warp::ws::{Message, WebSocket};
-use crate::{client::{Client, Clients, SubscribeRequest, Topics}, handler::subscribe_handler};
-use tokio::sync::mpsc;
+use crate::{client::{Client, Clients, SubscribeRequest, Topics}, handler::subscribe_handler, store::Command};
+use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use serde_json::from_str;
 
 
-pub async fn client_connection(ws: WebSocket, id: String, clients: Clients, mut client: Client, topics: Topics) {
+pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, topics_tx: Sender<Result<Command, Error>>, clients_tx: Sender<Result<Command, Error>>) {
     let (client_ws_tx, mut client_ws_rx) = ws.split();
     let (client_tx, client_rx) = mpsc::unbounded_channel::<Result<Message, warp::Error>>();
     let client_rx = UnboundedReceiverStream::new(client_rx); 
@@ -51,7 +53,7 @@ async fn client_msg(id: &str, msg: Message, clients: Clients, topics: Topics) {
             return;
         }
     };
-    println!("subscribe request {:?}", subscribe_request);
+    println!("subscribe request  from {}: {:?}", id, msg);
 
     subscribe_handler(subscribe_request, topics, clients).await;
 
