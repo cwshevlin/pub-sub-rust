@@ -6,7 +6,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, mpsc};
 use warp::{Filter, Reply};
 
-use crate::store::{Subscribers, Clients, StoreCommand};
+use crate::store::{Subscriptions, Subscribers, Clients, StoreCommand};
 mod frame;
 mod client;
 mod handler;
@@ -17,13 +17,15 @@ mod store;
 #[tokio::main]
 async fn main() {
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
-    let subscribers: Subscribers = Arc::new(Mutex::new(HashMap::new()));
+    // TODO: rename "subscriptions"
+    let subscribers: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
     let store = Arc::new(Mutex::new(HashMap::new()));
 
     let (clients_tx, mut clients_rx) = mpsc::channel::<ClientsCommand>(32);
     let (subscribers_tx, mut subscribers_rx) = mpsc::channel::<SubscribersCommand>(32);
     let (store_tx, mut store_rx) = mpsc::channel::<StoreCommand>(32);
     
+    // TODO CWS: move this and other similar logic to the store implementations?
     let store_manager = tokio::spawn(async move {
       while let Some(cmd) = store_rx.recv().await {
           match cmd {

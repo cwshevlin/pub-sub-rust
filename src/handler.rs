@@ -3,11 +3,7 @@ use std::io::Error;
 use crate::client::{Event, RegisterRequest, SubscribeRequest, UnsubscribeRequest};
 use crate::store::{Client, Clients, ClientsCommand, Subscribers, SubscribersCommand, get_client, insert_client, remove_client};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::oneshot;
-use uuid::Uuid;
 use serde_json::{Value, json};
-use warp::reject::Reject;
-use warp::ws::Message;
 use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
@@ -56,41 +52,9 @@ pub async fn publish_handler(body: Event, subscribers_tx: Sender<SubscribersComm
 }
 
 pub async fn subscribe_handler(body: SubscribeRequest, subscribers_tx: Sender<SubscribersCommand>, clients_tx: Sender<ClientsCommand>) -> Result<impl Reply, Rejection> {
-    println!("Client subscribing: {:#?}", clients);
-    if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
-        println!("Client subscribing: {:#?}", client);
-        for topic in body.subscribers {
-            if let Some(current_subscribers) = subscribers.lock().await.get(&topic) {
-                let mut current_subscribers = current_subscribers.clone();
-                current_subscribers.insert(client.clone());
-                subscribers.lock().await.insert(
-                    topic,
-                    current_subscribers
-                );
-            }
-        }
-        if let Some(sender) = &client.sender {
-            println!("Sending to client: {}", client.user_id);
-            sender.send(Ok(Message::text(format!("subscribed"))));
-        }
-        return Ok(StatusCode::OK);
-    }
-    Ok(StatusCode::NOT_FOUND)
+    todo!();
 }
 
 pub async fn unsubscribe_handler(body: UnsubscribeRequest, subscribers_tx: Sender<SubscribersCommand>, clients_tx: Sender<ClientsCommand>) -> Result<impl Reply, Rejection> {
-    if let Some(client) = clients.lock().await.get(&body.user_id).cloned() {
-        for topic in body.subscribers {
-            if let Some(current_subscribers) = subscribers.lock().await.get(&topic) {
-                let mut current_subscribers = current_subscribers.clone();
-                current_subscribers.remove(&client);
-                subscribers.lock().await.insert(
-                    topic,
-                    current_subscribers
-                );
-            }
-        }
-        return Ok(StatusCode::OK);
-    }
-    Ok(StatusCode::NOT_FOUND)
+    todo!();
 }

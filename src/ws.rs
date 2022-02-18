@@ -1,7 +1,7 @@
 use std::io::Error;
 
 use warp::ws::{Message, WebSocket};
-use crate::{client::{Client, Clients, SubscribeRequest, Subscribers}, handler::subscribe_handler, store::Command};
+use crate::{store::{Client, Clients, Subscribers}, handler::subscribe_handler, store::ClientsCommand};
 use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;

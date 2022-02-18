@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, io::Error, sync::Arc};
+use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, io::Error, sync::{Arc, mpsc::Receiver}};
 use bytes::Bytes;
 use tokio::sync::{Mutex, mpsc::{self, Sender}, oneshot};
 use warp::ws::Message;
@@ -54,9 +54,13 @@ impl Hash for Client {
     }
 }
 
+pub struct Store;
+pub struct Subscribers;
+
 pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
-pub type Subscribers = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
+pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
 type Responder<T> = oneshot::Sender<T>;
+
 
 pub enum StoreCommand {
     Get {
@@ -97,51 +101,94 @@ pub enum SubscribersCommand {
     }
 }
 
-pub async fn get_client(user_id: String, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
-    let (resp_tx, resp_rx) = oneshot::channel();
-    let command = ClientsCommand::Get {
-        key: user_id.clone(),
-        responder: resp_tx
-    };
-    clients_tx.send(command).await;
+impl Store {
+    pub async fn get(key: String, store_tx: Sender<StoreCommand>) -> Option<String> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let command =  StoreCommand::Get {
+            key: key,
+            responder: resp_tx
+        };
+        
+        let result = resp_rx.await;
 
-    let result = resp_rx.await;
-
-    match result {
-        Ok(client) => client,
-        Err(e) => None
+        match result {
+            Ok(value) => value,
+            Err(e) => None
+        }
     }
 }
 
-pub async fn insert_client(client: Client, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
-    let (resp_tx, resp_rx) = oneshot::channel();
-    let command = ClientsCommand::Insert {
-        key: client.user_id.clone(),
-        client: client,
-        responder: resp_tx
-    };
-    clients_tx.send(command).await;
+impl Client {
+    pub async fn get_client(user_id: String, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let command = ClientsCommand::Get {
+            key: user_id.clone(),
+            responder: resp_tx
+        };
+        clients_tx.send(command).await;
 
-    let result = resp_rx.await;
+        let result = resp_rx.await;
 
-    match result {
-        Ok(client) => client,
-        Err(e) => None
+        match result {
+            Ok(client) => client,
+            Err(e) => None
+        }
+    }
+
+    pub async fn insert_client(client: Client, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let command = ClientsCommand::Insert {
+            key: client.user_id.clone(),
+            client: client,
+            responder: resp_tx
+        };
+        clients_tx.send(command).await;
+
+        let result = resp_rx.await;
+
+        match result {
+            Ok(client) => client,
+            Err(e) => None
+        }
+    }
+
+    pub async fn remove_client(user_id: String, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let command = ClientsCommand::Remove {
+            key: user_id,
+            responder: resp_tx
+        };
+        clients_tx.send(command).await;
+
+        let result = resp_rx.await;
+
+        match result {
+            Ok(client) => client,
+            Err(e) => None
+        }
     }
 }
 
-pub async fn remove_client(user_id: String, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
-    let (resp_tx, resp_rx) = oneshot::channel();
-    let command = ClientsCommand::Remove {
-        key: user_id,
-        responder: resp_tx
-    };
-    clients_tx.send(command).await;
+impl Subscribers {
+    pub async fn get(topic: String, subscription_tx: Sender<SubscribersCommand>) -> Option<HashSet<Client>> {
+        let (resp_tx, resp_rx) = oneshot::channel();
+        let command = SubscribersCommand::Get {
+            key: topic,
+            responder: resp_tx
+        };
 
-    let result = resp_rx.await;
+        subscription_tx.send(command).await;
 
-    match result {
-        Ok(client) => client,
-        Err(e) => None
+        let result = resp_rx.await;
+
+        match result {
+            Ok(subscribers) => subscribers,
+            Err(e) => None
+        }
+    }
+
+    pub async fn add_subscriber(topic: String, subscriber: Client, subscription_tx: Sender<SubscribersCommand>) {
+
     }
 }
+
