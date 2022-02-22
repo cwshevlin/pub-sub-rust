@@ -1,37 +1,7 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, io::Error, sync::{Arc, mpsc::Receiver}};
 use bytes::Bytes;
-use tokio::sync::{Mutex, mpsc::{self, Sender}, oneshot};
+use tokio::sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}};
 use warp::ws::Message;
-/*
-
-Structure:
-
-shard/
-    chats/
-        id/
-            msg_read/
-                id/
-            msg/
-                id/
-    element_lists/
-        id/
-            elements/
-                id/
-                    data/
-                    metadata/
-            t: 123456789 (ignore)
-
-This suggests the following top level tables:
-    chats/<id>/msg
-        id: "<serialized json>"
-    chats/<id>/msg_read
-        id: "<serialized json>"
-    element_lists/<id>/elements
-        id: "<serialized json>"
-
-This is similar to how the manipulative children is represented in SQL
-
-*/
 
 
 #[derive(Clone, Debug)]
@@ -61,6 +31,22 @@ pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
 pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
 type Responder<T> = oneshot::Sender<T>;
 
+pub enum Command<T> {
+    // TODO: change String to &str?
+    Get {
+        key: String,
+        responder: Responder<Option<T>>,
+    },
+    Set {
+        key: String,
+        value: T,
+        responder: Responder<Option<T>>,
+    },
+    Remove {
+        key: String,
+        responder: Responder<Option<T>>,
+    }
+}
 
 pub enum StoreCommand {
     Get {
@@ -101,15 +87,32 @@ pub enum SubscribersCommand {
     }
 }
 
+pub async fn get_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command =  Command::<T>::Get {
+        key: key,
+        responder: resp_tx
+    };
+    sender.send(command).await;
+    
+    resp_rx.await
+}
+
+pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command =  Command::<T>::Set {
+        key: key,
+        value: value,
+        responder: resp_tx
+    };
+    sender.send(command).await;
+    
+    resp_rx.await
+}
+
 impl Store {
-    pub async fn get(key: String, store_tx: Sender<StoreCommand>) -> Option<String> {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let command =  StoreCommand::Get {
-            key: key,
-            responder: resp_tx
-        };
-        
-        let result = resp_rx.await;
+    pub async fn get(key: String, store_tx: Sender<Command<String>>) -> Option<String> {
+        let result = get_value(key, store_tx).await;
 
         match result {
             Ok(value) => value,
@@ -135,20 +138,11 @@ impl Client {
         }
     }
 
-    pub async fn insert_client(client: Client, clients_tx: Sender<ClientsCommand>) -> Option<Client> {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let command = ClientsCommand::Insert {
-            key: client.user_id.clone(),
-            client: client,
-            responder: resp_tx
-        };
-        clients_tx.send(command).await;
-
-        let result = resp_rx.await;
-
+    pub async fn insert_client(client: Client, clients_tx: Sender<Command<Client>>) -> Option<Client> {
+        let result = set_value(client.user_id.clone(), client, clients_tx).await;
         match result {
             Ok(client) => client,
-            Err(e) => None
+            Err(e) => Nonex
         }
     }
 
