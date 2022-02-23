@@ -1,13 +1,13 @@
+use std::collections::HashSet;
 use std::io::Error;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
-use store::{ClientsCommand, SubscribersCommand};
+use store::{Command, Client};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, mpsc};
 use warp::{Filter, Reply};
 
-use crate::store::{Subscriptions, Subscribers, Clients, StoreCommand};
-mod frame;
+use crate::store::{Subscriptions, Subscribers, Clients};
 mod client;
 mod handler;
 mod ws;
@@ -21,19 +21,19 @@ async fn main() {
     let subscribers: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
     let store = Arc::new(Mutex::new(HashMap::new()));
 
-    let (clients_tx, mut clients_rx) = mpsc::channel::<ClientsCommand>(32);
-    let (subscribers_tx, mut subscribers_rx) = mpsc::channel::<SubscribersCommand>(32);
-    let (store_tx, mut store_rx) = mpsc::channel::<StoreCommand>(32);
+    let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Option<Client>>>(32);
+    let (subscribers_tx, mut subscribers_rx) = mpsc::channel::<Command<Option<HashSet<Client>>>>(32);
+    let (store_tx, mut store_rx) = mpsc::channel::<Command<Option<String>>>(32);
     
     // TODO CWS: move this and other similar logic to the store implementations?
     let store_manager = tokio::spawn(async move {
       while let Some(cmd) = store_rx.recv().await {
           match cmd {
-              StoreCommand::Get { key, responder } => {
+              Command::Get { key, responder } => {
                   let result = store.lock().await.get(&key);
                   let _ = responder.send(result);
               }
-              StoreCommand::Set { key, value, responder } => {
+              Command::Set { key, value, responder } => {
                   let result = store.lock().await.insert(&key, value);
                   let _ = responder.send(result);
               }
@@ -99,10 +99,10 @@ async fn main() {
     warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
 }
 
-fn with_clients(clients_tx: Sender<ClientsCommand>) -> impl Filter<Extract = (Sender<ClientsCommand>,), Error = Infallible> + Clone {
+fn with_clients(clients_tx: Sender<Command<Option<Client>>>) -> impl Filter<Extract = (Sender<Command<Option<Client>>>,), Error = Infallible> + Clone {
     warp::any().map(move || clients_tx.clone())
 }
 
-fn with_subscribers(subscribers_tx: Sender<SubscribersCommand>) -> impl Filter<Extract = (Sender<SubscribersCommand>,), Error = Infallible> + Clone {
+fn with_subscribers(subscribers_tx: Sender<Command<Option<HashSet<Client>>>>) -> impl Filter<Extract = (Sender<Command<Option<HashSet<Client>>>>,), Error = Infallible> + Clone {
     warp::any().map(move || subscribers_tx.clone())
 }

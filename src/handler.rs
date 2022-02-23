@@ -1,14 +1,14 @@
 use std::io::Error;
 
 use crate::client::{Event, RegisterRequest, SubscribeRequest, UnsubscribeRequest};
-use crate::store::{Client, Clients, ClientsCommand, Subscribers, SubscribersCommand, get_client, insert_client, remove_client};
+use crate::store::{Client, Command};
 use tokio::sync::mpsc::Sender;
 use serde_json::{Value, json};
 use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
 
-pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<ClientsCommand>) -> Result<impl Reply, Rejection> {
+pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Command<Option<Client>>>) -> Result<impl Reply, Rejection> {
     let user_id = body.user_id;
     // let uuid = Uuid::new_v4().to_string();
     // TODO CWS: generate new uuids
