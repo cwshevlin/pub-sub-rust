@@ -8,7 +8,7 @@ use tokio::sync::{Mutex, mpsc};
 use warp::{Filter, Reply};
 
 use crate::store::{Subscriptions, Subscribers, Clients};
-mod client;
+mod serialize;
 mod handler;
 mod ws;
 mod store;
@@ -28,13 +28,19 @@ async fn main() {
     // TODO CWS: move this and other similar logic to the store implementations?
     let store_manager = tokio::spawn(async move {
       while let Some(cmd) = store_rx.recv().await {
+        // TODO: pass the data structure here so that it is the only one that has access?
           match cmd {
               Command::Get { key, responder } => {
+                  // TODO: this is an option in an option
                   let result = store.lock().await.get(&key);
                   let _ = responder.send(result);
               }
               Command::Set { key, value, responder } => {
                   let result = store.lock().await.insert(&key, value);
+                  let _ = responder.send(result);
+              }
+              Command::Remove { key, responder } => {
+                  let result = store.lock().await.remove(&key);
                   let _ = responder.send(result);
               }
           }
@@ -100,6 +106,7 @@ async fn main() {
 }
 
 fn with_clients(clients_tx: Sender<Command<Option<Client>>>) -> impl Filter<Extract = (Sender<Command<Option<Client>>>,), Error = Infallible> + Clone {
+  // TODO: Does this deep copy? 
     warp::any().map(move || clients_tx.clone())
 }
 
