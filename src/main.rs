@@ -18,12 +18,12 @@ mod store;
 async fn main() {
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
     // TODO: rename "subscriptions"
-    let subscribers: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
+    let subscriptions: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
     let store = Arc::new(Mutex::new(HashMap::new()));
 
-    let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Option<Client>>>(32);
-    let (subscribers_tx, mut subscribers_rx) = mpsc::channel::<Command<Option<HashSet<Client>>>>(32);
-    let (store_tx, mut store_rx) = mpsc::channel::<Command<Option<String>>>(32);
+    let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
+    let (subscriptions_tx, mut subscriptions_rx) = mpsc::channel::<Command<HashSet<Client>>>(32);
+    let (store_tx, mut store_rx) = mpsc::channel::<Command<String>>(32);
     
     // TODO CWS: move this and other similar logic to the store implementations?
     let store_manager = tokio::spawn(async move {
@@ -32,11 +32,12 @@ async fn main() {
           match cmd {
               Command::Get { key, responder } => {
                   // TODO: this is an option in an option
-                  let result = store.lock().await.get(&key);
-                  let _ = responder.send(result);
+                  if let Some(result) = store.lock().await.get(&key) {
+                    let _ = responder.send(Some(String::from(result)));
+                  }
               }
               Command::Set { key, value, responder } => {
-                  let result = store.lock().await.insert(&key, value);
+                  let result = store.lock().await.insert(key, value);
                   let _ = responder.send(result);
               }
               Command::Remove { key, responder } => {
@@ -55,61 +56,38 @@ async fn main() {
       .and(warp::post())
       .and(warp::body::content_length_limit(1024 * 16))
       .and(warp::body::json())
-      .and(with_clients(clients_tx))
+      .and(with_clients(clients_tx.clone()))
       .and_then(handler::register_handler)
       .or(register
         .and(warp::delete())
         .and(warp::path::param())
-        .and(with_clients(clients_tx))
+        .and(with_clients(clients_tx.clone()))
         .and_then(handler::unregister_handler));
-  
-    let publish = warp::path("publish")
-      .and(warp::post())
-      .and(warp::body::content_length_limit(1024 * 16))
-      .and(warp::body::json())
-      .and(with_subscribers(subscribers_tx))
-      .and(with_clients(clients_tx))
-      .and_then(handler::publish_handler);
-
-    let subscribe = warp::path("subscribe")
-      .and(warp::post())
-      .and(warp::body::content_length_limit(1024 * 16))
-      .and(warp::body::json())
-      .and(with_subscribers(subscribers_tx))
-      .and(with_clients(clients_tx))
-    .and_then(handler::subscribe_handler);
-
-    let unsubscribe = warp::path("unsubscribe")
-      .and(warp::post())
-      .and(warp::body::content_length_limit(1024 * 16))
-      .and(warp::body::json())
-      .and(with_subscribers(subscribers_tx))
-      .and(with_clients(clients_tx))
-      .and_then(handler::unsubscribe_handler);
   
     let ws_route = warp::path("ws")
       .and(warp::ws())
       .and(warp::path::param())
-      .and(with_subscribers(subscribers_tx))
-      .and(with_clients(clients_tx))
+      .and(with_subscriptions(subscriptions_tx))
+      .and(with_clients(clients_tx.clone()))
+      .and(with_store(store_tx))
       .and_then(handler::ws_handler);
   
     let routes = health_route
       .or(register_routes)
       .or(ws_route)
-      .or(publish)
-      .or(subscribe)
-      .or(unsubscribe)
       .with(warp::cors().allow_any_origin());
   
     warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
 }
 
-fn with_clients(clients_tx: Sender<Command<Option<Client>>>) -> impl Filter<Extract = (Sender<Command<Option<Client>>>,), Error = Infallible> + Clone {
-  // TODO: Does this deep copy? 
+fn with_clients(clients_tx: Sender<Command<Client>>) -> impl Filter<Extract = (Sender<Command<Client>>,), Error = Infallible> + Clone {
     warp::any().map(move || clients_tx.clone())
 }
 
-fn with_subscribers(subscribers_tx: Sender<Command<Option<HashSet<Client>>>>) -> impl Filter<Extract = (Sender<Command<Option<HashSet<Client>>>>,), Error = Infallible> + Clone {
-    warp::any().map(move || subscribers_tx.clone())
+fn with_subscriptions(subscriptions_tx: Sender<Command<HashSet<Client>>>) -> impl Filter<Extract = (Sender<Command<HashSet<Client>>>,), Error = Infallible> + Clone {
+    warp::any().map(move || subscriptions_tx.clone())
+}
+
+fn with_store(store_tx: Sender<Command<String>>) -> impl Filter<Extract = (Sender<Command<String>>,), Error = Infallible> + Clone {
+    warp::any().map(move || store_tx.clone())
 }
