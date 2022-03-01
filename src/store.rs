@@ -1,13 +1,12 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, io::Error, sync::{Arc, mpsc::Receiver}};
-use bytes::Bytes;
-use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}, fs::remove_dir};
+use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, sync::{Arc}};
+use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}};
 use warp::ws::Message;
 
 
 #[derive(Clone, Debug)]
 pub struct Client {
     pub user_id: String,
-    pub sender: Option<mpsc::UnboundedSender<std::result::Result<Message, warp::Error>>>
+    pub sender: Option<mpsc::UnboundedSender<Result<Message, warp::Error>>>
 }
 
 impl PartialEq for Client {
@@ -54,7 +53,11 @@ pub async fn get_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Opt
         key: key,
         responder: resp_tx
     };
-    sender.send(command).await;
+    // TODO: better error handling here
+    match sender.send(command).await {
+        Ok(result) => println!("send command result in get value: {:?}", result),
+        Err(_) => println!("get value error")
+    }
     
     resp_rx.await
 }
@@ -66,7 +69,10 @@ pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> 
         value: value,
         responder: resp_tx
     };
-    sender.send(command).await;
+    match sender.send(command).await {
+        Ok(result) => println!("send command result in set value: {:?}", result),
+        Err(_) => println!("get value error")
+    }
     
     resp_rx.await
 }
@@ -77,7 +83,10 @@ pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<
         key: key,
         responder: resp_tx
     };
-    sender.send(command).await;
+    match sender.send(command).await {
+        Ok(result) => println!("send command result in set value: {:?}", result),
+        Err(_) => println!("get value error")
+    }
     
     resp_rx.await
 }
@@ -98,6 +107,7 @@ impl Store {
 
 impl Client {
     pub async fn get_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
+        println!("user id:{}", user_id);
         get_value(user_id, clients_tx).await
     }
 
@@ -111,18 +121,18 @@ impl Client {
 }
 
 impl Subscribers {
-    pub async fn get_subscribers(topic: String, subscription_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
-        get_value(topic, subscription_tx).await
+    pub async fn get_subscribers(topic: String, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
+        get_value(topic, subscriptions_tx).await
     }
 
-    pub async fn add_subscriber(topic: String, subscriber: Client, subscription_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
+    pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
         // TODO: Add the ability to add a client to an existing set of clients who are subscribed to this topic
-        set_value(topic, HashSet::from([subscriber]), subscription_tx).await
+        set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
     }
 
-    pub async fn remove_subscriber(topic: String, subscriber: Client, subscription_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
+    pub async fn remove_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
         // TODO: Add the ability to remove a client from an existing set of clients who are subscribed to this topic
-        set_value(topic, HashSet::from([subscriber]), subscription_tx).await
+        set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
     }
 }
 

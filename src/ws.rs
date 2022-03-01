@@ -5,6 +5,7 @@ use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use serde_json::from_str;
+use log::{info, trace, warn};
 
 
 pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
@@ -14,7 +15,10 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
 
     tokio::task::spawn(client_rx.forward(client_ws_tx));
     client.sender = Some(client_tx);
-    Client::set_client(client, clients_tx.clone());
+    match Client::set_client(client, clients_tx.clone()).await {
+        Ok(result) => println!("set client result in set value: {:?}", result),
+        Err(_) => println!("get value error")
+    }
 
     println!("{} connected", id);
 
@@ -29,16 +33,20 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
         client_message(&id, message,subscriptions_tx.clone(), clients_tx.clone(),  store_tx.clone()).await;
     }
 
-    // clients.lock().await.remove(&id);
-    println!("{} disconnected", id);
+    match Client::remove_client(id, clients_tx.clone()).await {
+        Ok(result) => println!("Client disconnected: {:?}", result.unwrap()),
+        Err(_) => println!("get value error")
+    }
 }
 
-// TODO: ask for the store tx here
 async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
     println!("received message from {}: {:?}", user_id, msg);
 
     if msg.is_ping() {
-        ping_handler(user_id, clients_tx.clone());
+        match ping_handler(user_id, clients_tx.clone()).await {
+            Ok(_) => println!("Ping from client"),
+            Err(_) => println!("Ping error")
+        }
     }
 
     let message = match msg.to_str() {
@@ -59,16 +67,29 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
 
     match socket_request.action {
         RequestAction::Subscribe => {
-            subscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await;
+            match subscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
+                Ok(_) => println!("Ping from client"),
+                Err(_) => println!("Ping error")
+            }
         },
         RequestAction::Unsubscribe => {
-            unsubscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await;
+            match unsubscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
+                Ok(_) => println!("Ping from client"),
+                Err(_) => println!("Ping error")
+            }
         },
         RequestAction::Set => {
-            publish_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx, store_tx).await;
+            match publish_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx, store_tx).await {
+                Ok(_) => println!("Ping from client"),
+                Err(_) => println!("Ping error")
+            }
         },
         RequestAction::Remove => {
-            publish_handler(socket_request, String::from(user_id),  subscriptions_tx, clients_tx, store_tx).await;
+            match publish_handler(socket_request, String::from(user_id),  subscriptions_tx, clients_tx, store_tx).await {
+                Ok(_) => println!("Ping from client"),
+                Err(_) => println!("Ping error")
+
+            }
         }
     };
 }
