@@ -1,6 +1,6 @@
 use std::collections::{HashSet};
 use crate::serialize::{RegisterRequest, SocketRequest};
-use crate::store::{Client, Command, Store, Subscribers, Subscriptions};
+use crate::store::{Client, Command, Store, Subscribers};
 use tokio::sync::mpsc::Sender;
 use serde_json::{json};
 use warp::ws::Message;
@@ -8,7 +8,7 @@ use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
 use crate::serialize::RequestAction;
-use log::{info, trace, warn};
+use log::{info, warn, error};
 
 pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     // TODO: generate uuid and return to the client
@@ -36,7 +36,6 @@ pub async fn unregister_handler(user_id: String, clients_tx: Sender<Command<Clie
 
 pub async fn ws_handler(ws: warp::ws::Ws, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
     let client = Client::get_client(user_id.clone(), clients_tx.clone()).await;
-    println!(" client: {:?}", client);
 
     match client {
         Ok(Some(client)) => Ok(ws.on_upgrade(move |socket| ws::client_connection(socket, user_id, client, subscriptions_tx, clients_tx, store_tx))),
@@ -48,18 +47,34 @@ pub async fn health_handler() -> Result<impl Reply, Rejection> {
     Ok(StatusCode::OK)
 }
 
+// TODO: the docs for message say that the tungstunite sockets handle pongs. is that true?
 pub async fn ping_handler(user_id: &str, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     // todo: look up the user id and return a pong message
-    Ok(StatusCode::OK)
+    let client = Client::get_client(String::from(user_id), clients_tx).await;
+
+    match client {
+        Ok(Some(client)) => {
+            match client.sender {
+                Some(sender) => {
+                    match sender.send(Ok(Message::pong("pong"))) {
+                        Ok(_) => Ok(StatusCode::OK),
+                        Err(_) => Err(warp::reject::not_found()) 
+                    }
+                    
+                }
+                None => Err(warp::reject::not_found())
+            }
+        },
+        _ => Err(warp::reject::not_found())
+    }
 }
 
-pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
-    println!("publish request  from {}: {:?}", user_id, body);
+pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
     if let Some(message) = body.message {
         match body.action {
             RequestAction::Set => {
                 match Store::set(body.topic.clone(), message.clone(), store_tx).await {
-                    Ok(_) => alert_subscribers(body.topic, message, subscriptions_tx).await,
+                    Ok(_) => alert_subscribers(body.topic, message, user_id, subscriptions_tx).await,
                     Err(_) => Err(warp::reject::reject())
                 }
             },
@@ -70,7 +85,7 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
                 }
             },
             _ => {
-                eprintln!("Error: publish_handler must be called with a request of either Set or Remove");
+                error!("Error: publish_handler must be called with a request of either Set or Remove");
                 Err(warp::reject::reject())
             }
         }
@@ -79,10 +94,13 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
     }
 }
 
-async fn alert_subscribers(topic: String, value: String, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<StatusCode, Rejection> {
+async fn alert_subscribers(topic: String, value: String, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<StatusCode, Rejection> {
     match Subscribers::get_subscribers(topic.clone(), subscriptions_tx).await {
         Ok(Some(subscribers)) => {
             for client in subscribers {
+                if client.user_id == user_id {
+                    continue;
+                }
                 match client.sender {
                     Some(sender) => {
                         match sender.send(Ok(Message::text(value.clone()))) {
@@ -106,7 +124,6 @@ async fn alert_subscribers(topic: String, value: String, subscriptions_tx: Sende
 }
 
 pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
-    println!("subscribe request  from {}: {:?}", user_id, body);
     // TODO CWS: use match here instead of the conditional
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
@@ -118,7 +135,7 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
                 }
             },
             _ => {
-                eprintln!("Error: subscribe_handler must be called with a request of Subscribe");
+                error!("Error: subscribe_handler must be called with a request of Subscribe");
                 Err(warp::reject::reject())
             }
         }
@@ -128,18 +145,17 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
 }
 
 pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
-    println!("unsubscribe request  from {}: {:?}", user_id, body);
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {
             RequestAction::Subscribe => {
-                match Subscribers::add_subscriber(body.topic, client, subscriptions_tx).await {
+                match Subscribers::remove_subscriber(body.topic, client, subscriptions_tx).await {
                     Ok(_) => Ok(StatusCode::OK),
                     Err(_) => Err(warp::reject::reject())
                 }
             },
             _ => {
-                eprintln!("Error: subscribe_handler must be called with a request of Subscribe");
+                error!("Error: subscribe_handler must be called with a request of Subscribe");
                 Err(warp::reject::reject())
             }
         }

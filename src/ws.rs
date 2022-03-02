@@ -5,7 +5,7 @@ use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use serde_json::from_str;
-use log::{info, trace, warn};
+use log::{info, error};
 
 
 pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
@@ -16,17 +16,15 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
     tokio::task::spawn(client_rx.forward(client_ws_tx));
     client.sender = Some(client_tx);
     match Client::set_client(client, clients_tx.clone()).await {
-        Ok(result) => println!("set client result in set value: {:?}", result),
-        Err(_) => println!("get value error")
+        Ok(result) => info!("set client result: {:?}", result),
+        Err(err) => error!("set client error: {:?}", err)
     }
-
-    println!("{} connected", id);
 
     while let Some(result) = client_ws_rx.next().await {
         let message = match result {
             Ok(message) => message,
-            Err(e) => {
-                eprintln!("error receiving ws message for id: {}): {}", id.clone(), e);
+            Err(err) => {
+                error!("error receiving ws message for id: {}): {}", id.clone(), err);
                 break;
             }
         };
@@ -34,33 +32,32 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
     }
 
     match Client::remove_client(id, clients_tx.clone()).await {
-        Ok(result) => println!("Client disconnected: {:?}", result.unwrap()),
-        Err(_) => println!("get value error")
+        Ok(result) => info!("Client disconnected: {:?}", result.unwrap()),
+        Err(_) => error!("get value error")
     }
 }
 
 async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
-    println!("received message from {}: {:?}", user_id, msg);
-
     if msg.is_ping() {
         match ping_handler(user_id, clients_tx.clone()).await {
-            Ok(_) => println!("Ping from client"),
-            Err(_) => println!("Ping error")
+            Ok(_) => info!("Ping from client {}", user_id),
+            Err(err) => error!("Ping error: {:?}", err)
         }
+        return;
     }
 
     let message = match msg.to_str() {
         Ok(string) => string,
         Err(_) => {
-            eprintln!("Error while parsing message to string");
+            error!("Error while parsing message to string");
             return;
         }
     };
 
     let socket_request: SocketRequest = match from_str(&message) {
         Ok(request) => request,
-        Err(e) => {
-            eprintln!("Error while parsing socket request: {}", e);
+        Err(err) => {
+            error!("Error while parsing socket request: {}", err);
             return;
         }
     };
@@ -68,26 +65,26 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
     match socket_request.action {
         RequestAction::Subscribe => {
             match subscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
-                Ok(_) => println!("Ping from client"),
-                Err(_) => println!("Ping error")
+                Ok(_) => info!("client {} subscribed successfully", user_id),
+                Err(_) => error!("#subscribe_handler error")
             }
         },
         RequestAction::Unsubscribe => {
             match unsubscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
-                Ok(_) => println!("Ping from client"),
-                Err(_) => println!("Ping error")
+                Ok(_) => info!("client {} unsubscribed successfully", user_id),
+                Err(_) => error!("#unsubscribe_handler error")
             }
         },
         RequestAction::Set => {
-            match publish_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx, store_tx).await {
-                Ok(_) => println!("Ping from client"),
-                Err(_) => println!("Ping error")
+            match publish_handler(socket_request, String::from(user_id), subscriptions_tx, store_tx).await {
+                Ok(_) => info!("client {} published successfully", user_id),
+                Err(_) => error!("#publish_handler error")
             }
         },
         RequestAction::Remove => {
-            match publish_handler(socket_request, String::from(user_id),  subscriptions_tx, clients_tx, store_tx).await {
-                Ok(_) => println!("Ping from client"),
-                Err(_) => println!("Ping error")
+            match publish_handler(socket_request, String::from(user_id),  subscriptions_tx, store_tx).await {
+                Ok(_) => info!("client {} removed value successfully", user_id),
+                Err(_) => error!("#publish_handler error")
 
             }
         }

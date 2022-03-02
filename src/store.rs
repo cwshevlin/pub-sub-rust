@@ -1,6 +1,7 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, sync::{Arc}};
 use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}};
 use warp::ws::Message;
+use log::{info, error};
 
 
 #[derive(Clone, Debug)]
@@ -55,8 +56,8 @@ pub async fn get_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Opt
     };
     // TODO: better error handling here
     match sender.send(command).await {
-        Ok(result) => println!("send command result in get value: {:?}", result),
-        Err(_) => println!("get value error")
+        Ok(result) => info!("#get_value success: {:?}", result),
+        Err(err) => error!("#get_value error: {}", err)
     }
     
     resp_rx.await
@@ -70,8 +71,8 @@ pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> 
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => println!("send command result in set value: {:?}", result),
-        Err(_) => println!("get value error")
+        Ok(result) => info!("#set_value success: {:?}", result),
+        Err(err) => error!("#set_value error: {}", err)
     }
     
     resp_rx.await
@@ -84,15 +85,15 @@ pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => println!("send command result in set value: {:?}", result),
-        Err(_) => println!("get value error")
+        Ok(result) => info!("#remove_value success: {:?}", result),
+        Err(err) => error!("#remove_value error: {}", err)
     }
     
     resp_rx.await
 }
 
 impl Store {
-    pub async fn get(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+    pub async fn _get(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
         get_value(key, store_tx).await
     }
 
@@ -107,7 +108,6 @@ impl Store {
 
 impl Client {
     pub async fn get_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
-        println!("user id:{}", user_id);
         get_value(user_id, clients_tx).await
     }
 
