@@ -31,10 +31,9 @@ async fn main() {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
             Command::Get { key, responder } => {
-                  info!("Get from client store: {:?}", key);
+                info!("Get from client store: {:?}", key);
                 if let Some(result) = clients.lock().await.get(&key) {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
-                  println!("Result from client store: {:?}", result);
                   let _ = responder.send(Some(result.clone()));
                 }
             }

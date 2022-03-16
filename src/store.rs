@@ -2,6 +2,8 @@ use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, sync::{Arc}
 use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}};
 use warp::ws::Message;
 use log::{info, error};
+use settimeout::set_timeout;
+use std::time::Duration;
 
 
 #[derive(Clone, Debug)]
@@ -127,6 +129,13 @@ impl Subscribers {
 
     pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
         // TODO: Add the ability to add a client to an existing set of clients who are subscribed to this topic
+        let client = subscriber.clone();
+        tokio::spawn(async move {
+            loop {
+                set_timeout(Duration::from_secs(1)).await;
+                client.sender.as_ref().unwrap().send(Ok(Message::text("Hello")));
+            }
+        });
         set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
     }
 

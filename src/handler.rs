@@ -9,12 +9,13 @@ use crate::Reply;
 use crate::ws;
 use crate::serialize::RequestAction;
 use log::{info, warn, error};
+use uuid::Uuid;
 
 pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     // TODO: generate uuid and return to the client
-    let user_id = body.user_id;
+    let user_id = Uuid::new_v4();
     let client = Client {
-        user_id: user_id.clone(),
+        user_id: user_id.to_string(),
         sender: None
     };
     match Client::set_client(client, clients_tx.clone()).await {
