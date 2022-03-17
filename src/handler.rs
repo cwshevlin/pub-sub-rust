@@ -11,7 +11,7 @@ use crate::serialize::RequestAction;
 use log::{info, warn, error};
 use uuid::Uuid;
 
-pub async fn register_handler(body: RegisterRequest, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
+pub async fn register_handler(clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     // TODO: generate uuid and return to the client
     let user_id = Uuid::new_v4();
     let client = Client {

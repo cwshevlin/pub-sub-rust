@@ -46,6 +46,8 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
         return;
     }
 
+    println!("socket message: {:?}", msg.to_str());
+
     let message = match msg.to_str() {
         Ok(string) => string,
         Err(_) => {

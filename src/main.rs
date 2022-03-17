@@ -98,9 +98,7 @@ async fn main() {
 
   let register = warp::path("register");
   let register_routes = register
-    .and(warp::post())
-    .and(warp::body::content_length_limit(1024 * 16))
-    .and(warp::body::json())
+    .and(warp::get())
     .and(with_clients(clients_tx.clone()))
     .and_then(handler::register_handler)
     .or(register
