@@ -36,14 +36,17 @@ async fn main() {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
-            }
+            },
             Command::Set { key, value, responder } => {
                 let result = clients.lock().await.insert(key, value);
                 let _ = responder.send(result);
-            }
+            },
             Command::Remove { key, responder } => {
                 let result = clients.lock().await.remove(&key);
                 let _ = responder.send(result);
+            },
+            _ => {
+                error!("Only Get, Set and Remove may be used with subscriptions.");
             }
         }
     }
@@ -58,14 +61,18 @@ async fn main() {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
-            }
+            },
             Command::Set { key, value, responder } => {
                 let result = subscriptions.lock().await.insert(key, value);
+                println!("SUBSCRIPTIONS: {:?}", subscriptions.lock().await);
                 let _ = responder.send(result);
-            }
+            },
             Command::Remove { key, responder } => {
                 let result = subscriptions.lock().await.remove(&key);
                 let _ = responder.send(result);
+            },
+            _ => {
+                error!("Only Get, Set and Remove may be used with subscriptions.");
             }
         }
     }
@@ -79,14 +86,21 @@ async fn main() {
                 if let Some(result) = store.lock().await.get(&key) {
                   let _ = responder.send(Some(String::from(result)));
                 }
-            }
+            },
             Command::Set { key, value, responder } => {
                 let result = store.lock().await.insert(key, value);
+                println!("STORE: {:?}", store.lock().await);
                 let _ = responder.send(result);
-            }
+            },
             Command::Remove { key, responder } => {
                 let result = store.lock().await.remove(&key);
                 let _ = responder.send(result);
+            },
+            Command::RemoveFromCollection { key, value, responder } => {
+                // TODO: Remove from Collection
+            },
+            Command::AddToCollection { key, value, responder } => {
+                // TODO: Remove from Collection
             }
         }
     }

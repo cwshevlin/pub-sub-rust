@@ -79,14 +79,20 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
                     Err(_) => Err(warp::reject::reject())
                 }
             },
-            RequestAction::Remove => {
+            RequestAction::RemoveFromCollection => {
                 match Store::remove(body.topic, store_tx).await {
                     Ok(_) => Ok(StatusCode::OK),
                     Err(_) => Err(warp::reject::reject())
                 }
             },
+            RequestAction::AddToCollection => {
+                match Store::add_to_collection(body.topic, message.clone(), store_tx).await {
+                    Ok(_) => Ok(StatusCode::OK),
+                    Err(_) => Err(warp::reject::reject())
+                }
+            },
             _ => {
-                error!("Error: publish_handler must be called with a request of either Set or Remove");
+                error!("Error: publish_handler must be called with a request of either Set, Remove, or Add");
                 Err(warp::reject::reject())
             }
         }

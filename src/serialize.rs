@@ -16,7 +16,8 @@ pub enum RequestAction {
     Subscribe,
     Unsubscribe,
     Set,
-    Remove
+    RemoveFromCollection,
+    AddToCollection
 }
 
 #[derive(Deserialize, Debug)]

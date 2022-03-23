@@ -47,6 +47,16 @@ pub enum Command<T> {
     Remove {
         key: String,
         responder: Responder<Option<T>>,
+    },
+    AddToCollection {
+        key: String,
+        value: String,
+        responder: Responder<Option<T>>,
+    },
+    RemoveFromCollection {
+        key: String,
+        value: String,
+        responder: Responder<Option<T>>,
     }
 }
 
@@ -94,6 +104,36 @@ pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<
     resp_rx.await
 }
 
+pub async fn add_value_to_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command =  Command::<T>::AddToCollection {
+        key: key,
+        value: value,
+        responder: resp_tx
+    };
+    match sender.send(command).await {
+        Ok(result) => info!("#remove_value success: {:?}", result),
+        Err(err) => error!("#remove_value error: {}", err)
+    }
+    
+    resp_rx.await
+}
+
+pub async fn remove_value_from_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command =  Command::<T>::RemoveFromCollection {
+        key: key,
+        value: value,
+        responder: resp_tx
+    };
+    match sender.send(command).await {
+        Ok(result) => info!("#remove_value success: {:?}", result),
+        Err(err) => error!("#remove_value error: {}", err)
+    }
+    
+    resp_rx.await
+}
+
 impl Store {
     pub async fn _get(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
         get_value(key, store_tx).await
@@ -105,6 +145,14 @@ impl Store {
 
     pub async fn remove(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
         remove_value(key, store_tx).await
+    }
+
+    pub async fn add_to_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+        add_value_to_collection(key, value, store_tx).await
+    }
+
+    pub async fn remove_value_from_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+        remove_value_from_collection(key, value, store_tx).await
     }
 }
 
@@ -133,7 +181,7 @@ impl Subscribers {
         tokio::spawn(async move {
             loop {
                 set_timeout(Duration::from_secs(1)).await;
-                client.sender.as_ref().unwrap().send(Ok(Message::text("Hello")));
+                client.sender.as_ref().unwrap().send(Ok(Message::text("{\"11\":\"112233\"}")));
             }
         });
         set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
