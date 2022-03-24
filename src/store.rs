@@ -181,7 +181,7 @@ impl Subscribers {
         tokio::spawn(async move {
             loop {
                 set_timeout(Duration::from_secs(1)).await;
-                client.sender.as_ref().unwrap().send(Ok(Message::text("{\"11\":\"112233\"}")));
+                client.sender.as_ref().unwrap().send(Ok(Message::text("")));
             }
         });
         set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await

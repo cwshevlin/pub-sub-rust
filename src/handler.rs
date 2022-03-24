@@ -130,8 +130,8 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
     }
 }
 
+// TODO CWS: handle both subscribe and unsubscribe in the same method?
 pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
-    // TODO CWS: use match here instead of the conditional
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {
@@ -155,14 +155,17 @@ pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscript
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {
-            RequestAction::Subscribe => {
-                match Subscribers::remove_subscriber(body.topic, client, subscriptions_tx).await {
-                    Ok(_) => Ok(StatusCode::OK),
+            RequestAction::Unsubscribe => {
+                match Subscribers::remove_subscriber(body.topic.clone(), client, subscriptions_tx).await {
+                    Ok(_) => {
+                        println!("UNSUBSCRIBING FROM TOPIC {}", body.topic.clone());
+                        Ok(StatusCode::OK)
+                    },
                     Err(_) => Err(warp::reject::reject())
                 }
             },
             _ => {
-                error!("Error: subscribe_handler must be called with a request of Subscribe");
+                error!("Error: unsubscribe_handler must be called with a request of unsubscribe");
                 Err(warp::reject::reject())
             }
         }
