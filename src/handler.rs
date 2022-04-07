@@ -35,7 +35,7 @@ pub async fn unregister_handler(user_id: String, clients_tx: Sender<Command<Clie
     }
 }
 
-pub async fn ws_handler(ws: warp::ws::Ws, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
+pub async fn ws_handler(ws: warp::ws::Ws, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
     let client = Client::get_client(user_id.clone(), clients_tx.clone()).await;
 
     match client {
@@ -70,7 +70,7 @@ pub async fn ping_handler(user_id: &str, clients_tx: Sender<Command<Client>>) ->
     }
 }
 
-pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
+pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
     if let Some(message) = body.message {
         match body.action {
             RequestAction::Set => {
@@ -107,7 +107,7 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
     }
 }
 
-async fn alert_subscribers(topic: String, value: String, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<StatusCode, Rejection> {
+async fn alert_subscribers(topic: String, value: String, user_id: String, subscriptions_tx: Sender<Command<Client>>) -> Result<StatusCode, Rejection> {
     match Subscribers::get_subscribers(topic.clone(), subscriptions_tx).await {
         Ok(Some(subscribers)) => {
             for client in subscribers {
@@ -137,7 +137,7 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
 }
 
 // TODO CWS: handle both subscribe and unsubscribe in the same method?
-pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
+pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {
@@ -157,7 +157,7 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
     }
 }
 
-pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
+pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {

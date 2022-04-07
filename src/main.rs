@@ -25,7 +25,7 @@ async fn main() {
   let collection_store = Arc::new(Mutex::new(HashMap::<String, HashSet::<String>>::new()));
 
   let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
-  let (subscriptions_tx, mut subscriptions_rx) = mpsc::channel::<Command<HashSet<Client>>>(32);
+  let (subscriptions_tx, mut subscriptions_rx) = mpsc::channel::<Command<Client>>(32);
   let (store_tx, mut store_rx) = mpsc::channel::<Command<String>>(32);
   
   // TODO CWS: move this and other similar logic to the store implementations?
@@ -49,7 +49,7 @@ async fn main() {
                 let _ = responder.send(result);
             },
             _ => {
-                error!("Only Get, Set and Remove may be used with subscriptions.");
+                error!("Only Get, Set and Unset may be used with clients.");
             }
         }
     }
@@ -65,17 +65,26 @@ async fn main() {
                   let _ = responder.send(Some(result.clone()));
                 }
             },
-            Command::Set { key, value, responder } => {
-                let result = subscriptions.lock().await.insert(key, value);
-                println!("SUBSCRIPTIONS: {:?}", subscriptions.lock().await);
+            Command::RemoveFromCollection { key, value, responder } => {
+                let mut subscriptions = subscriptions.lock().await;
+                let subscriptions_option = subscriptions.get_mut(&key);
+                let result = match subscriptions_option {
+                  Some(collection) => collection.remove(&value),
+                  None => false
+                };
                 let _ = responder.send(result);
             },
-            Command::Unset { key, responder } => {
-                let result = subscriptions.lock().await.remove(&key);
+            Command::AddToCollection { key, value, responder } => {
+                let mut subscriptions = subscriptions.lock().await;
+                let subscriptions_option = subscriptions.get_mut(&key);
+                let result = match subscriptions_option {
+                  Some(subscription) => subscription.insert(value),
+                  None => false
+                };
                 let _ = responder.send(result);
-            },
+            }
             _ => {
-                error!("Only Get, Set and Remove may be used with subscriptions.");
+                error!("Only Get, Set and Unset may be used with subscriptions.");
             }
         }
     }
@@ -85,10 +94,6 @@ async fn main() {
     while let Some(cmd) = store_rx.recv().await {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
-          // "room1": "value|value2|"
-          // "room1/0": "value1",
-          // "room1/1": "value2",
-          // "room1/2": "value3",
             Command::Get { key, responder } => {
                 if let Some(result) = string_store.lock().await.get(&key) {
                   let _ = responder.send(Some(String::from(result)));

@@ -48,12 +48,12 @@ pub enum Command<T> {
     },
     AddToCollection {
         key: String,
-        value: String,
+        value: T,
         responder: Responder<bool>,
     },
     RemoveFromCollection {
         key: String,
-        value: String,
+        value: T,
         responder: Responder<bool>,
     }
 }
@@ -102,7 +102,7 @@ pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<
     resp_rx.await
 }
 
-pub async fn add_value_to_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
+pub async fn add_value_to_collection<T>(key: String, value: T, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
     let command =  Command::<T>::AddToCollection {
         key: key,
@@ -117,7 +117,7 @@ pub async fn add_value_to_collection<T>(key: String, value: String, sender: Send
     resp_rx.await
 }
 
-pub async fn remove_value_from_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
+pub async fn remove_value_from_collection<T>(key: String, value: T, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
     let command =  Command::<T>::RemoveFromCollection {
         key: key,
@@ -173,14 +173,14 @@ impl Subscribers {
         get_value(topic, subscriptions_tx).await
     }
 
-    pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
+    pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<Client>>) -> Result<bool, RecvError> {
         // TODO: Add the ability to add a client to an existing set of clients who are subscribed to this topic
-        set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
+        add_value_to_collection(topic, subscriber, subscriptions_tx).await
     }
 
-    pub async fn remove_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
+    pub async fn remove_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<Client>>) -> Result<bool, RecvError> {
         // TODO: Add the ability to remove a client from an existing set of clients who are subscribed to this topic
-        set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
+        remove_value_from_collection(topic, subscriber, subscriptions_tx).await
     }
 }
 

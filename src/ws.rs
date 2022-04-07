@@ -8,7 +8,7 @@ use serde_json::from_str;
 use log::{info, error};
 
 
-pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
+pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
     let (client_ws_tx, mut client_ws_rx) = ws.split();
     let (client_tx, client_rx) = mpsc::unbounded_channel::<Result<Message, warp::Error>>();
     let client_rx = UnboundedReceiverStream::new(client_rx); 
@@ -37,7 +37,7 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
     }
 }
 
-async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<HashSet<Client>>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
+async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
     if msg.is_ping() {
         match ping_handler(user_id, clients_tx.clone()).await {
             Ok(_) => info!("Ping from client {}", user_id),
