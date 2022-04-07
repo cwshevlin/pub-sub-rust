@@ -2,8 +2,6 @@ use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, sync::{Arc}
 use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}};
 use warp::ws::Message;
 use log::{info, error};
-use settimeout::set_timeout;
-use std::time::Duration;
 
 
 #[derive(Clone, Debug)]
@@ -44,19 +42,19 @@ pub enum Command<T> {
         value: T,
         responder: Responder<Option<T>>,
     },
-    Remove {
+    Unset {
         key: String,
         responder: Responder<Option<T>>,
     },
     AddToCollection {
         key: String,
         value: String,
-        responder: Responder<Option<T>>,
+        responder: Responder<bool>,
     },
     RemoveFromCollection {
         key: String,
         value: String,
-        responder: Responder<Option<T>>,
+        responder: Responder<bool>,
     }
 }
 
@@ -92,7 +90,7 @@ pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> 
 
 pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
-    let command =  Command::<T>::Remove {
+    let command =  Command::<T>::Unset {
         key: key,
         responder: resp_tx
     };
@@ -104,7 +102,7 @@ pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<
     resp_rx.await
 }
 
-pub async fn add_value_to_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+pub async fn add_value_to_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
     let command =  Command::<T>::AddToCollection {
         key: key,
@@ -119,7 +117,7 @@ pub async fn add_value_to_collection<T>(key: String, value: String, sender: Send
     resp_rx.await
 }
 
-pub async fn remove_value_from_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
+pub async fn remove_value_from_collection<T>(key: String, value: String, sender: Sender<Command<T>>) -> Result<bool, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
     let command =  Command::<T>::RemoveFromCollection {
         key: key,
@@ -143,15 +141,15 @@ impl Store {
         set_value(key, value, store_tx).await
     }
 
-    pub async fn remove(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+    pub async fn unset(key: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
         remove_value(key, store_tx).await
     }
 
-    pub async fn add_to_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+    pub async fn add_to_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<bool, RecvError> {
         add_value_to_collection(key, value, store_tx).await
     }
 
-    pub async fn remove_value_from_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
+    pub async fn remove_value_from_collection(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<bool, RecvError> {
         remove_value_from_collection(key, value, store_tx).await
     }
 }
@@ -177,13 +175,6 @@ impl Subscribers {
 
     pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
         // TODO: Add the ability to add a client to an existing set of clients who are subscribed to this topic
-        let client = subscriber.clone();
-        tokio::spawn(async move {
-            loop {
-                set_timeout(Duration::from_secs(1)).await;
-                client.sender.as_ref().unwrap().send(Ok(Message::text("")));
-            }
-        });
         set_value(topic, HashSet::from([subscriber]), subscriptions_tx).await
     }
 

@@ -10,6 +10,8 @@ mod serialize;
 mod handler;
 mod ws;
 mod store;
+use settimeout::set_timeout;
+use std::time::Duration;
 #[macro_use]
 extern crate log;
 
@@ -19,7 +21,8 @@ async fn main() {
 
   let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
   let subscriptions: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
-  let store = Arc::new(Mutex::new(HashMap::new()));
+  let string_store = Arc::new(Mutex::new(HashMap::new()));
+  let collection_store = Arc::new(Mutex::new(HashMap::<String, HashSet::<String>>::new()));
 
   let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
   let (subscriptions_tx, mut subscriptions_rx) = mpsc::channel::<Command<HashSet<Client>>>(32);
@@ -41,7 +44,7 @@ async fn main() {
                 let result = clients.lock().await.insert(key, value);
                 let _ = responder.send(result);
             },
-            Command::Remove { key, responder } => {
+            Command::Unset { key, responder } => {
                 let result = clients.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
@@ -67,7 +70,7 @@ async fn main() {
                 println!("SUBSCRIPTIONS: {:?}", subscriptions.lock().await);
                 let _ = responder.send(result);
             },
-            Command::Remove { key, responder } => {
+            Command::Unset { key, responder } => {
                 let result = subscriptions.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
@@ -82,30 +85,52 @@ async fn main() {
     while let Some(cmd) = store_rx.recv().await {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
+          // "room1": "value|value2|"
+          // "room1/0": "value1",
+          // "room1/1": "value2",
+          // "room1/2": "value3",
             Command::Get { key, responder } => {
-                if let Some(result) = store.lock().await.get(&key) {
+                if let Some(result) = string_store.lock().await.get(&key) {
                   let _ = responder.send(Some(String::from(result)));
                 }
             },
             Command::Set { key, value, responder } => {
-                let result = store.lock().await.insert(key, value);
-                println!("STORE: {:?}", store.lock().await);
+                let result = string_store.lock().await.insert(key, value);
+                println!("STORE: {:?}", string_store.lock().await);
                 let _ = responder.send(result);
             },
-            Command::Remove { key, responder } => {
-                let result = store.lock().await.remove(&key);
+            Command::Unset { key, responder } => {
+                let result = string_store.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
             Command::RemoveFromCollection { key, value, responder } => {
-                // TODO: Remove from Collection
+                let mut collection_store = collection_store.lock().await;
+                let collection_option = collection_store.get_mut(&key);
+                let result = match collection_option {
+                  Some(collection) => collection.remove(&value),
+                  None => false
+                };
+                let _ = responder.send(result);
             },
             Command::AddToCollection { key, value, responder } => {
-                // TODO: Remove from Collection
+                let mut collection_store = collection_store.lock().await;
+                let collection_option = collection_store.get_mut(&key);
+                let result = match collection_option {
+                  Some(collection) => collection.insert(value),
+                  None => false
+                };
+                let _ = responder.send(result);
             }
         }
     }
   });
   
+  tokio::spawn(async move {
+      loop {
+          set_timeout(Duration::from_secs(1)).await;
+          // TODO CWS: update state on this
+      }
+  });
 
 
   let health_route = warp::path!("health").and_then(handler::health_handler);

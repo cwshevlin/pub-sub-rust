@@ -83,6 +83,12 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
                 Err(_) => error!("#publish_handler error")
             }
         },
+        RequestAction::Unset => {
+            match publish_handler(socket_request, String::from(user_id), subscriptions_tx, store_tx).await {
+                Ok(_) => info!("client {} published successfully", user_id),
+                Err(_) => error!("#publish_handler error")
+            }
+        },
         RequestAction::RemoveFromCollection => {
             match publish_handler(socket_request, String::from(user_id),  subscriptions_tx, store_tx).await {
                 Ok(_) => info!("client {} removed value successfully", user_id),

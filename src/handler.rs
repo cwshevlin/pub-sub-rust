@@ -79,14 +79,20 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
                     Err(_) => Err(warp::reject::reject())
                 }
             },
-            RequestAction::RemoveFromCollection => {
-                match Store::remove(body.topic, store_tx).await {
-                    Ok(_) => Ok(StatusCode::OK),
+            RequestAction::Unset => {
+                match Store::unset(body.topic.clone(), store_tx).await {
+                    Ok(_) => alert_subscribers(body.topic, message, user_id, subscriptions_tx).await,
                     Err(_) => Err(warp::reject::reject())
                 }
             },
             RequestAction::AddToCollection => {
                 match Store::add_to_collection(body.topic, message.clone(), store_tx).await {
+                    Ok(_) => Ok(StatusCode::OK),
+                    Err(_) => Err(warp::reject::reject())
+                }
+            },
+            RequestAction::RemoveFromCollection => {
+                match Store::remove_value_from_collection(body.topic, message.clone(), store_tx).await {
                     Ok(_) => Ok(StatusCode::OK),
                     Err(_) => Err(warp::reject::reject())
                 }
