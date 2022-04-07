@@ -1,5 +1,5 @@
 use std::collections::{HashSet};
-use crate::serialize::{RegisterRequest, SocketRequest};
+use crate::serialize::{SocketRequest};
 use crate::store::{Client, Command, Store, Subscribers};
 use tokio::sync::mpsc::Sender;
 use serde_json::{json};
