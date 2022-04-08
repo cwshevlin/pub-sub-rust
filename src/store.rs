@@ -33,18 +33,22 @@ type Responder<T> = oneshot::Sender<T>;
 
 pub enum Command<T> {
     // TODO: change String to &str?
-    Get {
+    GetItem {
         key: String,
         responder: Responder<Option<T>>,
     },
-    Set {
+    SetItem {
         key: String,
         value: T,
         responder: Responder<Option<T>>,
     },
-    Unset {
+    UnsetItem {
         key: String,
         responder: Responder<Option<T>>,
+    },
+    GetCollection {
+        key: String,
+        responder: Responder<Option<HashSet<T>>>,
     },
     AddToCollection {
         key: String,
@@ -60,7 +64,7 @@ pub enum Command<T> {
 
 pub async fn get_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
-    let command =  Command::<T>::Get {
+    let command =  Command::<T>::GetItem {
         key: key,
         responder: resp_tx
     };
@@ -75,7 +79,7 @@ pub async fn get_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Opt
 
 pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
-    let command =  Command::<T>::Set {
+    let command =  Command::<T>::SetItem {
         key: key,
         value: value,
         responder: resp_tx
@@ -90,7 +94,7 @@ pub async fn set_value<T>(key: String, value: T, sender: Sender<Command<T>>) -> 
 
 pub async fn remove_value<T>(key: String, sender: Sender<Command<T>>) -> Result<Option<T>, RecvError> {
     let (resp_tx, resp_rx) = oneshot::channel();
-    let command =  Command::<T>::Unset {
+    let command =  Command::<T>::UnsetItem {
         key: key,
         responder: resp_tx
     };
@@ -122,6 +126,20 @@ pub async fn remove_value_from_collection<T>(key: String, value: T, sender: Send
     let command =  Command::<T>::RemoveFromCollection {
         key: key,
         value: value,
+        responder: resp_tx
+    };
+    match sender.send(command).await {
+        Ok(result) => info!("#remove_value success: {:?}", result),
+        Err(err) => error!("#remove_value error: {}", err)
+    }
+    
+    resp_rx.await
+}
+
+pub async fn get_collection<T>(key: String, sender: Sender<Command<T>>) -> Result<Option<HashSet<T>>, RecvError> {
+    let (resp_tx, resp_rx) = oneshot::channel();
+    let command =  Command::<T>::GetCollection {
+        key: key,
         responder: resp_tx
     };
     match sender.send(command).await {
@@ -169,8 +187,8 @@ impl Client {
 }
 
 impl Subscribers {
-    pub async fn get_subscribers(topic: String, subscriptions_tx: Sender<Command<HashSet<Client>>>) -> Result<Option<HashSet<Client>>, RecvError> {
-        get_value(topic, subscriptions_tx).await
+    pub async fn get_subscribers(topic: String, subscriptions_tx: Sender<Command<Client>>) -> Result<Option<HashSet<Client>>, RecvError> {
+        get_collection(topic, subscriptions_tx).await
     }
 
     pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<Client>>) -> Result<bool, RecvError> {

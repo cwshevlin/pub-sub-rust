@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::result;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
 use store::{Command, Client};
@@ -33,18 +34,18 @@ async fn main() {
     while let Some(cmd) = clients_rx.recv().await {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
-            Command::Get { key, responder } => {
+            Command::GetItem { key, responder } => {
                 info!("Get from client store: {:?}", key);
                 if let Some(result) = clients.lock().await.get(&key) {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
             },
-            Command::Set { key, value, responder } => {
+            Command::SetItem { key, value, responder } => {
                 let result = clients.lock().await.insert(key, value);
                 let _ = responder.send(result);
             },
-            Command::Unset { key, responder } => {
+            Command::UnsetItem { key, responder } => {
                 let result = clients.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
@@ -59,7 +60,7 @@ async fn main() {
     while let Some(cmd) = subscriptions_rx.recv().await {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
-            Command::Get { key, responder } => {
+            Command::GetCollection { key, responder } => {
                 if let Some(result) = subscriptions.lock().await.get(&key) {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
@@ -94,17 +95,17 @@ async fn main() {
     while let Some(cmd) = store_rx.recv().await {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
-            Command::Get { key, responder } => {
+            Command::GetItem { key, responder } => {
                 if let Some(result) = string_store.lock().await.get(&key) {
                   let _ = responder.send(Some(String::from(result)));
                 }
             },
-            Command::Set { key, value, responder } => {
+            Command::SetItem { key, value, responder } => {
                 let result = string_store.lock().await.insert(key, value);
                 println!("STORE: {:?}", string_store.lock().await);
                 let _ = responder.send(result);
             },
-            Command::Unset { key, responder } => {
+            Command::UnsetItem { key, responder } => {
                 let result = string_store.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
@@ -123,6 +124,15 @@ async fn main() {
                 let result = match collection_option {
                   Some(collection) => collection.insert(value),
                   None => false
+                };
+                let _ = responder.send(result);
+            }
+            Command::GetCollection { key, responder } => {
+                let collection_store = collection_store.lock().await;
+                let collection_option = collection_store.get(&key);
+                let result = match collection_option {
+                    Some(collection) => Some(collection.clone()),
+                    None => None
                 };
                 let _ = responder.send(result);
             }
@@ -172,7 +182,7 @@ fn with_clients(clients_tx: Sender<Command<Client>>) -> impl Filter<Extract = (S
     warp::any().map(move || clients_tx.clone())
 }
 
-fn with_subscriptions(subscriptions_tx: Sender<Command<HashSet<Client>>>) -> impl Filter<Extract = (Sender<Command<HashSet<Client>>>,), Error = Infallible> + Clone {
+fn with_subscriptions(subscriptions_tx: Sender<Command<Client>>) -> impl Filter<Extract = (Sender<Command<Client>>,), Error = Infallible> + Clone {
     warp::any().map(move || subscriptions_tx.clone())
 }
 
