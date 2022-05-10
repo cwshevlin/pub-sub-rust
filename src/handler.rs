@@ -1,4 +1,3 @@
-use std::collections::{HashSet};
 use crate::serialize::{SocketRequest};
 use crate::store::{Client, Command, Store, Subscribers};
 use tokio::sync::mpsc::Sender;
@@ -14,10 +13,12 @@ use uuid::Uuid;
 pub async fn register_handler(clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     // TODO: generate uuid and return to the client
     let user_id = Uuid::new_v4();
+    println!("Registering: {}", user_id.to_string().clone());
     let client = Client {
         user_id: user_id.to_string(),
         sender: None
     };
+
     match Client::set_client(client, clients_tx.clone()).await {
         Ok(_) => {
             Ok(json!({
@@ -36,6 +37,7 @@ pub async fn unregister_handler(user_id: String, clients_tx: Sender<Command<Clie
 }
 
 pub async fn ws_handler(ws: warp::ws::Ws, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
+    println!("ws handler: {}", user_id.to_string().clone());
     let client = Client::get_client(user_id.clone(), clients_tx.clone()).await;
 
     match client {

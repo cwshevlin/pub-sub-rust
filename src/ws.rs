@@ -1,4 +1,3 @@
-use std::{collections::HashSet};
 use warp::ws::{Message, WebSocket};
 use crate::{store::{Client, Command}, handler::{subscribe_handler, ping_handler, unsubscribe_handler, publish_handler}, serialize::{RequestAction, SocketRequest}};
 use tokio::sync::mpsc::{self, Sender};
@@ -9,6 +8,7 @@ use log::{info, error};
 
 
 pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
+    println!("client connection: {}", id.to_string().clone());
     let (client_ws_tx, mut client_ws_rx) = ws.split();
     let (client_tx, client_rx) = mpsc::unbounded_channel::<Result<Message, warp::Error>>();
     let client_rx = UnboundedReceiverStream::new(client_rx); 
@@ -38,6 +38,7 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
 }
 
 async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
+    println!("client message: {}, {:?}", user_id.to_string().clone(), msg.to_str());
     if msg.is_ping() {
         match ping_handler(user_id, clients_tx.clone()).await {
             Ok(_) => info!("Ping from client {}", user_id),

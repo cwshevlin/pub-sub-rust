@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::result;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
 use store::{Command, Client};
@@ -11,8 +10,6 @@ mod serialize;
 mod handler;
 mod ws;
 mod store;
-use settimeout::set_timeout;
-use std::time::Duration;
 #[macro_use]
 extern crate log;
 
@@ -139,14 +136,6 @@ async fn main() {
         }
     }
   });
-  
-  tokio::spawn(async move {
-      loop {
-          set_timeout(Duration::from_secs(1)).await;
-          // TODO CWS: update state on this
-      }
-  });
-
 
   let health_route = warp::path!("health").and_then(handler::health_handler);
 
