@@ -1,5 +1,6 @@
 use crate::serialize::{SocketRequest};
-use crate::store::{Client, Command, Store, Subscribers};
+use crate::store::{Client, Store, Subscribers};
+use crate::command::Command;
 use tokio::sync::mpsc::Sender;
 use serde_json::{json};
 use warp::ws::Message;

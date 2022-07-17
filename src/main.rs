@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::{collections::HashMap, convert::Infallible};
 use std::sync::Arc;
-use store::{Command, Client};
+use store::Client;
+use command::{Command};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, mpsc};
 use warp::{Filter, Reply};
@@ -10,6 +11,8 @@ mod serialize;
 mod handler;
 mod ws;
 mod store;
+mod command;
+
 #[macro_use]
 extern crate log;
 
