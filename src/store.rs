@@ -3,6 +3,8 @@ use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError
 use warp::ws::Message;
 use crate::command::{Command, get_value, set_value, remove_value, get_collection, add_value_to_collection, remove_value_from_collection};
 
+pub type Responder<T> = oneshot::Sender<T>;
+
 #[derive(Clone, Debug)]
 pub struct Client {
     pub user_id: String,
@@ -27,13 +29,22 @@ impl Hash for Client {
     }
 }
 
-pub struct Store;
-pub struct Subscribers;
+impl Client {
+    pub async fn get_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
+        get_value(user_id, clients_tx).await
+    }
 
+    pub async fn set_client(client: Client, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
+        set_value(client.user_id.clone(), client, clients_tx).await
+    }
+
+    pub async fn remove_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
+        remove_value(user_id, clients_tx).await
+    }
+}
 pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
-pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
-pub type Responder<T> = oneshot::Sender<T>;
 
+pub struct Store;
 impl Store {
     pub async fn set(key: String, value: String, store_tx: Sender<Command<String>>) -> Result<Option<String>, RecvError> {
         set_value(key, value, store_tx).await
@@ -52,20 +63,7 @@ impl Store {
     }
 }
 
-impl Client {
-    pub async fn get_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
-        get_value(user_id, clients_tx).await
-    }
-
-    pub async fn set_client(client: Client, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
-        set_value(client.user_id.clone(), client, clients_tx).await
-    }
-
-    pub async fn remove_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
-        remove_value(user_id, clients_tx).await
-    }
-}
-
+pub struct Subscribers;
 impl Subscribers {
     pub async fn get_subscribers(topic: String, subscriptions_tx: Sender<Command<Client>>) -> Result<Option<HashSet<Client>>, RecvError> {
         get_collection(topic, subscriptions_tx).await
@@ -81,4 +79,4 @@ impl Subscribers {
         remove_value_from_collection(topic, subscriber, subscriptions_tx).await
     }
 }
-
+pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
