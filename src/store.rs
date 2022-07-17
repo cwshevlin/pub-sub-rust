@@ -42,7 +42,7 @@ impl Client {
         remove_value(user_id, clients_tx).await
     }
 }
-pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
+pub type Clients = Arc<HashMap<String, Client>>;
 
 pub struct Store;
 impl Store {
@@ -79,4 +79,4 @@ impl Subscribers {
         remove_value_from_collection(topic, subscriber, subscriptions_tx).await
     }
 }
-pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
+pub type Subscriptions = Arc<HashMap<String, HashSet<Client>>>;

@@ -20,10 +20,10 @@ extern crate log;
 async fn main() {
   env_logger::init();
 
-  let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
-  let subscriptions: Subscriptions = Arc::new(Mutex::new(HashMap::new()));
-  let string_store = Arc::new(Mutex::new(HashMap::new()));
-  let collection_store = Arc::new(Mutex::new(HashMap::<String, HashSet::<String>>::new()));
+  let clients: Clients = Arc::new(HashMap::new());
+  let subscriptions: Subscriptions = Arc::new(HashMap::new());
+  let string_store = Arc::new(HashMap::new());
+  let collection_store = Arc::new(HashMap::<String, HashSet::<String>>::new());
 
   let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
   let (subscriptions_tx, mut subscriptions_rx) = mpsc::channel::<Command<Client>>(32);
@@ -36,17 +36,17 @@ async fn main() {
         match cmd {
             Command::GetItem { key, responder } => {
                 info!("Get from client store: {:?}", key);
-                if let Some(result) = clients.lock().await.get(&key) {
+                if let Some(result) = clients.get(&key) {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
             },
             Command::SetItem { key, value, responder } => {
-                let result = clients.lock().await.insert(key, value);
+                let result = clients.insert(key, value);
                 let _ = responder.send(result);
             },
             Command::UnsetItem { key, responder } => {
-                let result = clients.lock().await.remove(&key);
+                let result = clients.remove(&key);
                 let _ = responder.send(result);
             },
             _ => {
@@ -61,13 +61,12 @@ async fn main() {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
             Command::GetCollection { key, responder } => {
-                if let Some(result) = subscriptions.lock().await.get(&key) {
+                if let Some(result) = subscriptions.get(&key) {
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
             },
             Command::RemoveFromCollection { key, value, responder } => {
-                let mut subscriptions = subscriptions.lock().await;
                 let subscriptions_option = subscriptions.get_mut(&key);
                 let result = match subscriptions_option {
                   Some(collection) => collection.remove(&value),
@@ -76,7 +75,6 @@ async fn main() {
                 let _ = responder.send(result);
             },
             Command::AddToCollection { key, value, responder } => {
-                let mut subscriptions = subscriptions.lock().await;
                 let subscriptions_option = subscriptions.get_mut(&key);
                 let result = match subscriptions_option {
                   Some(subscription) => subscription.insert(value),
@@ -96,21 +94,20 @@ async fn main() {
       // TODO: pass the data structure here so that it is the only one that has access?
         match cmd {
             Command::GetItem { key, responder } => {
-                if let Some(result) = string_store.lock().await.get(&key) {
+                if let Some(result) = string_store.get(&key) {
                   let _ = responder.send(Some(String::from(result)));
                 }
             },
             Command::SetItem { key, value, responder } => {
-                let result = string_store.lock().await.insert(key, value);
-                println!("STORE: {:?}", string_store.lock().await);
+                let result = string_store.insert(key, value);
+                println!("STORE: {:?}", string_store);
                 let _ = responder.send(result);
             },
             Command::UnsetItem { key, responder } => {
-                let result = string_store.lock().await.remove(&key);
+                let result = string_store.remove(&key);
                 let _ = responder.send(result);
             },
             Command::RemoveFromCollection { key, value, responder } => {
-                let mut collection_store = collection_store.lock().await;
                 let collection_option = collection_store.get_mut(&key);
                 let result = match collection_option {
                   Some(collection) => collection.remove(&value),
@@ -119,7 +116,6 @@ async fn main() {
                 let _ = responder.send(result);
             },
             Command::AddToCollection { key, value, responder } => {
-                let mut collection_store = collection_store.lock().await;
                 let collection_option = collection_store.get_mut(&key);
                 let result = match collection_option {
                   Some(collection) => collection.insert(value),
@@ -128,7 +124,6 @@ async fn main() {
                 let _ = responder.send(result);
             }
             Command::GetCollection { key, responder } => {
-                let collection_store = collection_store.lock().await;
                 let collection_option = collection_store.get(&key);
                 let result = match collection_option {
                     Some(collection) => Some(collection.clone()),
