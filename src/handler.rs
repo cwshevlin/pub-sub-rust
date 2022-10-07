@@ -135,7 +135,10 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
             info!("No clients found subscribed to topic {}, skipping", topic.clone());
             Ok(StatusCode::OK)
         }
-        Err(_) => Err(warp::reject::reject())
+        Err(_) => {
+            error!("Error getting subscribers.");
+            Err(warp::reject::reject())
+        }
     }
 }
 
@@ -146,7 +149,14 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
         match body.action {
             RequestAction::Subscribe => {
                 match Subscribers::add_subscriber(body.topic, client, subscriptions_tx).await {
-                    Ok(_) => Ok(StatusCode::OK),
+                    Ok(result) => {
+                        if result {
+                            return Ok(StatusCode::OK)
+                        } else {
+                            return Err(warp::reject::reject())
+                        }
+
+                    }
                     Err(_) => Err(warp::reject::reject())
                 }
             },
@@ -167,7 +177,7 @@ pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscript
             RequestAction::Unsubscribe => {
                 match Subscribers::remove_subscriber(body.topic.clone(), client, subscriptions_tx).await {
                     Ok(_) => {
-                        println!("UNSUBSCRIBING FROM TOPIC {}", body.topic.clone());
+                        debug!("UNSUBSCRIBING FROM TOPIC {}", body.topic.clone());
                         Ok(StatusCode::OK)
                     },
                     Err(_) => Err(warp::reject::reject())

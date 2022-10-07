@@ -79,4 +79,6 @@ impl Subscribers {
         remove_value_from_collection(topic, subscriber, subscriptions_tx).await
     }
 }
+
 pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
+

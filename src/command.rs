@@ -1,6 +1,8 @@
 use crate::store::Responder;
 use std::collections::HashSet;
 use tokio::sync::{mpsc::Sender, oneshot::{self, error::RecvError}};
+
+#[derive(Debug)]
 pub enum Command<T> {
     // TODO: change String to &str?
     GetItem {
@@ -84,8 +86,8 @@ pub async fn add_value_to_collection<T>(key: String, value: T, sender: Sender<Co
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => info!("#remove_value success: {:?}", result),
-        Err(err) => error!("#remove_value error: {}", err)
+        Ok(result) => info!("#add_value_to_collection success: {:?}", result),
+        Err(err) => error!("#add_value_to_collection error: {}", err)
     }
     
     resp_rx.await
@@ -99,8 +101,8 @@ pub async fn remove_value_from_collection<T>(key: String, value: T, sender: Send
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => info!("#remove_value success: {:?}", result),
-        Err(err) => error!("#remove_value error: {}", err)
+        Ok(result) => info!("#remove_value_from_collection success: {:?}", result),
+        Err(err) => error!("#remove_value_from_collection error: {}", err)
     }
     
     resp_rx.await
@@ -113,8 +115,8 @@ pub async fn get_collection<T>(key: String, sender: Sender<Command<T>>) -> Resul
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => info!("#remove_value success: {:?}", result),
-        Err(err) => error!("#remove_value error: {}", err)
+        Ok(result) => info!("#get_collection success: {:?}", result),
+        Err(err) => error!("#get_collection error: {}", err)
     }
     
     resp_rx.await

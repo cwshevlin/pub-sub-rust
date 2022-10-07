@@ -38,15 +38,17 @@ async fn main() {
             Command::GetItem { key, responder } => {
                 info!("Get from client store: {:?}", key);
                 if let Some(result) = clients.lock().await.get(&key) {
-                  // TODO CWS: this clone is probably unecessary. What can we do with references here?
+                  // TODO CWS: this clone is probably unecessary. What can we do with references here? And if we do that, can we include referenced variables in the logs?
                   let _ = responder.send(Some(result.clone()));
                 }
             },
             Command::SetItem { key, value, responder } => {
+                info!("Set value: {:?} for key: {:?} in the client store.", value, key);
                 let result = clients.lock().await.insert(key, value);
                 let _ = responder.send(result);
             },
             Command::UnsetItem { key, responder } => {
+                info!("Unset key: {:?} in the client store.", key);
                 let result = clients.lock().await.remove(&key);
                 let _ = responder.send(result);
             },
@@ -63,6 +65,7 @@ async fn main() {
         match cmd {
             Command::GetCollection { key, responder } => {
                 if let Some(result) = subscriptions.lock().await.get(&key) {
+                  info!("Get key {:?} from the subscriptions store. Result: {:?}", key, result);
                   // TODO CWS: this clone is probably unecessary. What can we do with references here?
                   let _ = responder.send(Some(result.clone()));
                 }
@@ -74,6 +77,7 @@ async fn main() {
                   Some(collection) => collection.remove(&value),
                   None => false
                 };
+                info!("Remove key {:?} from the subscriptions store. Result: {:?}", key, result);
                 let _ = responder.send(result);
             },
             Command::AddToCollection { key, value, responder } => {
@@ -83,6 +87,7 @@ async fn main() {
                   Some(subscription) => subscription.insert(value),
                   None => false
                 };
+                info!("Add to key {:?} in the subscriptions store. Result: {:?}", key, result);
                 let _ = responder.send(result);
             }
             _ => {
@@ -98,16 +103,18 @@ async fn main() {
         match cmd {
             Command::GetItem { key, responder } => {
                 if let Some(result) = string_store.lock().await.get(&key) {
+                  info!("Get key {:?} in the string store. Result: {:?}", key, result);
                   let _ = responder.send(Some(String::from(result)));
                 }
             },
             Command::SetItem { key, value, responder } => {
                 let result = string_store.lock().await.insert(key, value);
-                println!("STORE: {:?}", string_store.lock().await);
+                info!("Set key in the string store. Result: {:?}. Current store: {:?}", result, string_store.lock().await);
                 let _ = responder.send(result);
             },
             Command::UnsetItem { key, responder } => {
                 let result = string_store.lock().await.remove(&key);
+                info!("Unset key in the string store. Key: {:?}, Result: {:?}, Current store: {:?}", key, result, string_store.lock().await);
                 let _ = responder.send(result);
             },
             Command::RemoveFromCollection { key, value, responder } => {
@@ -117,6 +124,7 @@ async fn main() {
                   Some(collection) => collection.remove(&value),
                   None => false
                 };
+                info!("Remove from collection in the string store. Key: {:?}, Value: {:?} Result: {:?}, Current store: {:?}", key, value, result, string_store.lock().await);
                 let _ = responder.send(result);
             },
             Command::AddToCollection { key, value, responder } => {
@@ -126,6 +134,7 @@ async fn main() {
                   Some(collection) => collection.insert(value),
                   None => false
                 };
+                info!("Add to collection in the string store. Key: {:?}, Result: {:?}, Current store: {:?}", key, result, string_store.lock().await);
                 let _ = responder.send(result);
             }
             Command::GetCollection { key, responder } => {
@@ -135,6 +144,7 @@ async fn main() {
                     Some(collection) => Some(collection.clone()),
                     None => None
                 };
+                info!("Get collection in the string store. Key: {:?}, Result: {:?}, Current store: {:?}", key, result, string_store.lock().await);
                 let _ = responder.send(result);
             }
         }
