@@ -82,3 +82,11 @@ impl Subscribers {
 
 pub type Subscriptions = Arc<Mutex<HashMap<String, HashSet<Client>>>>;
 
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+    }
+
+}

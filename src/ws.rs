@@ -107,3 +107,11 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
         }
     };
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+    }
+
+}

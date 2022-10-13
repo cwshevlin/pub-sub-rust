@@ -166,6 +166,7 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
             }
         }
     } else {
+        error!("Error retrieving the client in the subscribe handler");
         Err(warp::reject::reject())
     }
 }
@@ -190,5 +191,12 @@ pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscript
         }
     } else {
         Err(warp::reject::reject())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
     }
 }

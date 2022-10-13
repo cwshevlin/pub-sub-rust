@@ -121,3 +121,30 @@ pub async fn get_collection<T>(key: String, sender: Sender<Command<T>>) -> Resul
     
     resp_rx.await
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_get_value() {
+    }
+
+    #[test]
+    fn test_set_value() {
+    }
+
+    #[test]
+    fn test_remove_value() {
+    }
+
+    #[test]
+    fn test_add_value_to_collection() {
+    }
+
+    #[test]
+    fn test_remove_value_from_collection() {
+    }
+
+    #[test]
+    fn test_get_collection() {
+    }
+}

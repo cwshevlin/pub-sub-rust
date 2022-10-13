@@ -85,9 +85,18 @@ async fn main() {
                 let subscriptions_option = subscriptions.get_mut(&key);
                 let result = match subscriptions_option {
                   Some(subscription) => subscription.insert(value),
-                  None => false
+                  None => {
+                    let mut subscription = HashSet::new();
+                    subscription.insert(value);
+                    let insert_result = subscriptions.insert(key, subscription);
+                    if insert_result.is_some() {
+                      false
+                    } else {
+                      true
+                    }
+                  }
                 };
-                info!("Add to key {:?} in the subscriptions store. Result: {:?}", key, result);
+                info!("Add to collection in the subscriptions store. Result: {:?}", result);
                 let _ = responder.send(result);
             }
             _ => {
