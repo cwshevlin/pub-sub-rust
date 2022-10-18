@@ -15,6 +15,7 @@ pub async fn register_handler(clients_tx: Sender<Command<Client>>) -> Result<imp
     // TODO: generate uuid and return to the client
     let user_id = Uuid::new_v4();
     println!("Registering: {}", user_id.to_string().clone());
+    // TODO: does this sender need to be populated?
     let client = Client {
         user_id: user_id.to_string(),
         sender: None
