@@ -48,7 +48,7 @@ pub async fn ws_handler(ws: warp::ws::Ws, user_id: String, subscriptions_tx: Sen
     }
 }
 
-pub async fn health_handler() -> Result<impl Reply, Rejection> {
+pub async fn health_handler() -> Result<StatusCode, Rejection> {
     Ok(StatusCode::OK)
 }
 
@@ -197,7 +197,36 @@ pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscript
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
+    use warp::hyper::StatusCode;
+    use crate::command::Command;
+    use crate::store::{Client};
+    use tokio::sync::mpsc;
+    use crate::Reply;
+
+    use super::health_handler;
+    use super::register_handler;
+
+    #[tokio::test]
+    async fn test_register_handler() {
+        let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
+        // TODO CWS: this just hangs forever
+        while let Some(cmd) = clients_rx.recv().await {
+            match cmd {
+                Command::SetItem { key, value, responder } => {
+                    let _ = responder.send(Some(Client { sender: None, user_id: "1".to_string() }));
+                },
+                _ => ()
+            }
+        }
+        let result = register_handler(clients_tx).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().into_response().status(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_health_handler() {
+        let result = health_handler().await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), StatusCode::OK);
     }
 }
