@@ -199,28 +199,74 @@ pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscript
 mod tests {
     use warp::hyper::StatusCode;
     use crate::command::Command;
-    use crate::store::{Client};
+    use crate::store::{Client, Clients};
     use tokio::sync::mpsc;
     use crate::Reply;
+    use std::collections::HashMap;
+    use tokio::sync::Mutex;
+    use std::sync::Arc;
 
-    use super::health_handler;
     use super::register_handler;
+    use super::ws_handler;
+    use super::unregister_handler;
+    use super::health_handler;
 
     #[tokio::test]
     async fn test_register_handler() {
         let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
-        // TODO CWS: this just hangs forever
-        while let Some(cmd) = clients_rx.recv().await {
-            match cmd {
-                Command::SetItem { key, value, responder } => {
-                    let _ = responder.send(Some(Client { sender: None, user_id: "1".to_string() }));
-                },
-                _ => ()
+        let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
+
+        tokio::spawn(async move {
+            while let Some(cmd) = clients_rx.recv().await {
+            // TODO: pass the data structure here so that it is the only one that has access?
+                match cmd {
+                    Command::SetItem { key, value, responder } => {
+                        let result = clients.lock().await.insert(key, value);
+                        let _ = responder.send(result);
+                    },
+                    _ => panic!()
+                }
             }
-        }
+        });
+
         let result = register_handler(clients_tx).await;
+
         assert!(result.is_ok());
         assert_eq!(result.unwrap().into_response().status(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_unregister_handler() {
+        let (clients_tx, mut clients_rx) = mpsc::channel::<Command<Client>>(32);
+        let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
+        let client = Client {
+            user_id: String::from("1"),
+            sender: None
+        };
+        clients.lock().await.insert("1".to_string(), client);
+
+        tokio::spawn(async move {
+            while let Some(cmd) = clients_rx.recv().await {
+                match cmd {
+                    Command::UnsetItem { key, responder } => {
+                        let result = clients.lock().await.remove(&key);
+                        let _ = responder.send(result);
+                    },
+                    _ => panic!()
+                }
+            }
+        });
+
+        let result = unregister_handler("1".to_string(), clients_tx).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().into_response().status(), 200);
+    }
+
+    #[tokio::test]
+    async fn test_ws_handler() {
+        
+
     }
 
     #[tokio::test]

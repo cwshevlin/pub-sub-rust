@@ -306,7 +306,6 @@ use std::println as info;
 
         tokio::spawn(async move {
             while let Some(cmd) = subscriptions_rx.recv().await {
-            // TODO: pass the data structure here so that it is the only one that has access?
                 match cmd {
                     Command::RemoveFromCollection { key, value, responder } => {
                         let mut subscriptions = subscriptions.lock().await;
