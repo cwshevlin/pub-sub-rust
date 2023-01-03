@@ -2,6 +2,7 @@ use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher, sync::{Arc}
 use tokio::{sync::{Mutex, mpsc::{self, Sender}, oneshot::{self, error::RecvError}}};
 use warp::ws::Message;
 use crate::command::{Command, get_value, set_value, remove_value, get_collection, add_value_to_collection, remove_value_from_collection};
+use mockall::automock;
 
 pub type Responder<T> = oneshot::Sender<T>;
 
@@ -29,6 +30,7 @@ impl Hash for Client {
     }
 }
 
+#[automock]
 impl Client {
     pub async fn get_client(user_id: String, clients_tx: Sender<Command<Client>>) -> Result<Option<Client>, RecvError> {
         get_value(user_id, clients_tx).await

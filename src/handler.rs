@@ -52,28 +52,6 @@ pub async fn health_handler() -> Result<StatusCode, Rejection> {
     Ok(StatusCode::OK)
 }
 
-// TODO: the docs for message say that the tungstunite sockets handle pongs. is that true?
-pub async fn ping_handler(user_id: &str, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
-    // todo: look up the user id and return a pong message
-    let client = Client::get_client(String::from(user_id), clients_tx).await;
-
-    match client {
-        Ok(Some(client)) => {
-            match client.sender {
-                Some(sender) => {
-                    match sender.send(Ok(Message::pong("pong"))) {
-                        Ok(_) => Ok(StatusCode::OK),
-                        Err(_) => Err(warp::reject::not_found()) 
-                    }
-                    
-                }
-                None => Err(warp::reject::not_found())
-            }
-        },
-        _ => Err(warp::reject::not_found())
-    }
-}
-
 pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) -> Result<impl Reply, Rejection> {
     if let Some(message) = body.message {
         match body.action {
@@ -121,7 +99,7 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
                 match client.sender {
                     Some(sender) => {
                         match sender.send(Ok(Message::text(value.clone()))) {
-                            Ok(_) => info!("Subscriber alerted: {:?}", &client.user_id),
+                            Ok(_) => debug!("Subscriber alerted: {:?}", &client.user_id),
                             Err(_) => warn!("Error sending update to subscriber: {:?}", &client.user_id)
                         }
                     }
@@ -133,25 +111,26 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
             Ok(StatusCode::OK)
         },
         Ok(None) => {
-            info!("No clients found subscribed to topic {}, skipping", topic.clone());
+            debug!("No clients found subscribed to topic {}, skipping", topic.clone());
             Ok(StatusCode::OK)
         }
         Err(_) => {
+            // TODO CWS: When running from postman, we're not getting subscribers.
             error!("Error getting subscribers.");
             Err(warp::reject::reject())
         }
     }
 }
 
-// TODO CWS: handle both subscribe and unsubscribe in the same method?
-pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
+pub async fn subscription_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
     let client = Client::get_client(user_id, clients_tx).await;
     if let Ok(Some(client)) = client {
         match body.action {
             RequestAction::Subscribe => {
-                match Subscribers::add_subscriber(body.topic, client, subscriptions_tx).await {
+                match Subscribers::add_subscriber(body.topic.clone(), client, subscriptions_tx).await {
                     Ok(result) => {
                         if result {
+                            debug!("Subscribing to topic {}", body.topic.clone());
                             return Ok(StatusCode::OK)
                         } else {
                             return Err(warp::reject::reject())
@@ -161,25 +140,10 @@ pub async fn subscribe_handler(body: SocketRequest, user_id: String, subscriptio
                     Err(_) => Err(warp::reject::reject())
                 }
             },
-            _ => {
-                error!("Error: subscribe_handler must be called with a request of Subscribe");
-                Err(warp::reject::reject())
-            }
-        }
-    } else {
-        error!("Error retrieving the client in the subscribe handler");
-        Err(warp::reject::reject())
-    }
-}
-
-pub async fn unsubscribe_handler(body: SocketRequest, user_id: String, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
-    let client = Client::get_client(user_id, clients_tx).await;
-    if let Ok(Some(client)) = client {
-        match body.action {
             RequestAction::Unsubscribe => {
                 match Subscribers::remove_subscriber(body.topic.clone(), client, subscriptions_tx).await {
                     Ok(_) => {
-                        debug!("UNSUBSCRIBING FROM TOPIC {}", body.topic.clone());
+                        debug!("Unsubscribing to topic {}", body.topic.clone());
                         Ok(StatusCode::OK)
                     },
                     Err(_) => Err(warp::reject::reject())
@@ -207,7 +171,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::register_handler;
-    use super::ws_handler;
     use super::unregister_handler;
     use super::health_handler;
 
@@ -263,11 +226,6 @@ mod tests {
         assert_eq!(result.unwrap().into_response().status(), 200);
     }
 
-    #[tokio::test]
-    async fn test_ws_handler() {
-        
-
-    }
 
     #[tokio::test]
     async fn test_health_handler() {

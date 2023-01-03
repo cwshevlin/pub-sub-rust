@@ -1,5 +1,5 @@
 use warp::ws::{Message, WebSocket};
-use crate::{store::Client, handler::{subscribe_handler, ping_handler, unsubscribe_handler, publish_handler}, serialize::{RequestAction, SocketRequest}};
+use crate::{store::Client, handler::{publish_handler, subscription_handler}, serialize::{RequestAction, SocketRequest}};
 use tokio::sync::mpsc::{self, Sender};
 use futures::{StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -39,16 +39,11 @@ pub async fn client_connection(ws: WebSocket, id: String, mut client: Client, su
 }
 
 async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Command<Client>>, clients_tx: Sender<Command<Client>>, store_tx: Sender<Command<String>>) {
-    println!("client message: {}, {:?}", user_id.to_string().clone(), msg.to_str());
-    if msg.is_ping() {
-        match ping_handler(user_id, clients_tx.clone()).await {
-            Ok(_) => info!("Ping from client {}", user_id),
-            Err(err) => error!("Ping error: {:?}", err)
-        }
-        return;
-    }
+    debug!("client message: {}, {:?}", user_id.to_string().clone(), msg.to_str());
 
-    println!("socket message: {:?}", msg.to_str());
+    if msg.is_ping() {
+        debug!("Ping from client {}", user_id);
+    }
 
     let message = match msg.to_str() {
         Ok(string) => string,
@@ -68,13 +63,13 @@ async fn client_message(user_id: &str, msg: Message, subscriptions_tx: Sender<Co
 
     match socket_request.action {
         RequestAction::Subscribe => {
-            match subscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
+            match subscription_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
                 Ok(_) => info!("client {} subscribed successfully", user_id),
                 Err(_) => error!("#subscribe_handler error")
             }
         },
         RequestAction::Unsubscribe => {
-            match unsubscribe_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
+            match subscription_handler(socket_request, String::from(user_id), subscriptions_tx, clients_tx).await {
                 Ok(_) => info!("client {} unsubscribed successfully", user_id),
                 Err(_) => error!("#unsubscribe_handler error")
             }
