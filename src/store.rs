@@ -72,12 +72,10 @@ impl Subscribers {
     }
 
     pub async fn add_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<Client>>) -> Result<bool, RecvError> {
-        // TODO: Add the ability to add a client to an existing set of clients who are subscribed to this topic
         add_value_to_collection(topic, subscriber, subscriptions_tx).await
     }
 
     pub async fn remove_subscriber(topic: String, subscriber: Client, subscriptions_tx: Sender<Command<Client>>) -> Result<bool, RecvError> {
-        // TODO: Add the ability to remove a client from an existing set of clients who are subscribed to this topic
         remove_value_from_collection(topic, subscriber, subscriptions_tx).await
     }
 }

@@ -8,7 +8,7 @@ use warp::{Rejection, hyper::StatusCode};
 use crate::Reply;
 use crate::ws;
 use crate::serialize::RequestAction;
-use log::{info, warn, error};
+use log::{warn, error};
 use uuid::Uuid;
 
 pub async fn register_handler(clients_tx: Sender<Command<Client>>) -> Result<impl Reply, Rejection> {
@@ -63,7 +63,7 @@ pub async fn publish_handler(body: SocketRequest, user_id: String, subscriptions
             },
             RequestAction::Unset => {
                 match Store::unset(body.topic.clone(), store_tx).await {
-                    Ok(_) => alert_subscribers(body.topic, message, user_id, subscriptions_tx).await,
+                    Ok(_) => alert_subscribers(body.topic, String::from(""), user_id, subscriptions_tx).await,
                     Err(_) => Err(warp::reject::reject())
                 }
             },
@@ -115,7 +115,6 @@ async fn alert_subscribers(topic: String, value: String, user_id: String, subscr
             Ok(StatusCode::OK)
         }
         Err(_) => {
-            // TODO CWS: When running from postman, we're not getting subscribers.
             error!("Error getting subscribers.");
             Err(warp::reject::reject())
         }
@@ -181,7 +180,6 @@ mod tests {
 
         tokio::spawn(async move {
             while let Some(cmd) = clients_rx.recv().await {
-            // TODO: pass the data structure here so that it is the only one that has access?
                 match cmd {
                     Command::SetItem { key, value, responder } => {
                         let result = clients.lock().await.insert(key, value);

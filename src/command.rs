@@ -116,7 +116,7 @@ pub async fn get_collection<T>(key: String, sender: Sender<Command<T>>) -> Resul
         responder: resp_tx
     };
     match sender.send(command).await {
-        Ok(result) => info!("#get_collection success: {:?}", result),
+        Ok(result) => debug!("#get_collection success: {:?}", result),
         Err(err) => error!("#get_collection error: {}", err)
     }
     
